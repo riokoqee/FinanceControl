@@ -712,7 +712,7 @@ export default function App() {
             aria-label={tr("BeliLog — главная")}
           >
             <span className="brand-mark">
-              <img src="/belilog-icon-512.png" alt="" />
+              <img src={`${import.meta.env.BASE_URL}belilog-icon-512.png`} alt="" />
             </span>
             <span className="brand-name">
               BeliLog
@@ -956,7 +956,7 @@ export default function App() {
                         </span>
                       </div>
                       <div className="voyage-art" aria-hidden="true">
-                        <img src="/belilog-icon-512.png" alt="" />
+                        <img src={`${import.meta.env.BASE_URL}belilog-icon-512.png`} alt="" />
                       </div>
                     </section>
                   )}

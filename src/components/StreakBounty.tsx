@@ -249,7 +249,7 @@ export default function StreakBounty({
               className={`bounty-poster-portrait ${profile.avatar ? "" : "bounty-poster-portrait--hat"}`}
             >
               <img
-                src={profile.avatar || "/belilog-icon-512.png"}
+                src={profile.avatar || `${import.meta.env.BASE_URL}belilog-icon-512.png`}
                 alt={t.portrait}
               />
               <span className="bounty-poster-stamp" aria-hidden="true">
