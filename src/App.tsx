@@ -69,11 +69,14 @@ import StreakBounty, {
   StreakBadge,
   useStreakStats,
 } from "./components/StreakBounty";
+import type { BountyCelebration } from "./components/StreakBounty";
+import { getStreakStats } from "./lib/streak";
+import { getStreakIncrease } from "./lib/pirateRanks";
 import { LanguageProvider, translate, useI18n } from "./lib/i18n";
 import type { Language } from "./lib/finance";
 
 type Page = "overview" | "tracker" | "profile";
-type Toast = { message: string; error?: boolean; undo?: () => void };
+type Toast = { message: string; error?: boolean; undo?: () => void; pirate?: boolean };
 const categoryIcons: Record<CategoryId, LucideIcon> = {
   food: Utensils,
   shopping: ShoppingBag,
@@ -174,6 +177,7 @@ export default function App() {
   } | null>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [bountyCelebration, setBountyCelebration] = useState<(BountyCelebration & { page: Page }) | null>(null);
   const [storageOk, setStorageOk] = useState(true);
   const [showDemoBanner, setShowDemoBanner] = useState(true);
   const [chartRange, setChartRange] = useState<"month" | "week">("month");
@@ -327,6 +331,7 @@ export default function App() {
       if (event.key !== STORAGE_KEY || !event.newValue) return;
       try {
         const incoming = validateBackup(event.newValue);
+        setBountyCelebration(null);
         setData(incoming);
         setProfile(incoming.profile);
         setToast({ message: "Изменения из другой вкладки синхронизированы" });
@@ -363,6 +368,20 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
+    if (!bountyCelebration) return;
+    const timer = setTimeout(() => setBountyCelebration(null), Math.max(0, bountyCelebration.expiresAt - Date.now()));
+    return () => clearTimeout(timer);
+  }, [bountyCelebration]);
+  useEffect(() => {
+    // Navigation must not replay a reward on a newly mounted poster.
+    setBountyCelebration(null);
+  }, [page]);
+  useEffect(() => {
+    if (bountyCelebration && (!streak.activeToday || streak.current !== bountyCelebration.toDays)) {
+      setBountyCelebration(null);
+    }
+  }, [streak.activeToday, streak.current, bountyCelebration]);
+  useEffect(() => {
     if (page !== "profile") setProfile(data.profile);
   }, [data.profile, page]);
   useEffect(() => {
@@ -394,6 +413,12 @@ export default function App() {
   }
   function saveTransaction(value: Transaction) {
     const editing = modal !== "new";
+    const now = new Date();
+    const currentTransactions = latest.current.data.transactions;
+    const increase = editing ? null : getStreakIncrease(
+      getStreakStats(currentTransactions, now),
+      getStreakStats([value, ...currentTransactions], now),
+    );
     setData((d) => ({
       ...d,
       transactions: editing
@@ -402,13 +427,23 @@ export default function App() {
     }));
     setMonth(value.date.slice(0, 7));
     setModal(null);
+    setBountyCelebration(increase ? {
+      ...increase,
+      id: value.id,
+      expiresAt: Date.now() + 6000,
+      page,
+    } : null);
     setToast({
-      message: editing
+      message: increase?.promoted
+        ? `${tr("Расход добавлен. Всё под контролем!")} ${language === "en" ? "New pirate rank" : "Новый пиратский ранг"}: ${increase.rank.name[language]}!`
+        : editing
         ? tr("Изменения сохранены")
         : tr("Расход добавлен. Всё под контролем!"),
+      pirate: increase?.promoted,
     });
   }
   function deleteTransaction(transaction: Transaction) {
+    setBountyCelebration(null);
     setData((d) => ({
       ...d,
       transactions: d.transactions.filter((t) => t.id !== transaction.id),
@@ -484,6 +519,7 @@ export default function App() {
   }
   function restoreBackup(replaceAll: boolean) {
     if (!pendingImport) return;
+    setBountyCelebration(null);
     if (replaceAll) {
       setData(pendingImport);
       setProfile(pendingImport.profile);
@@ -534,6 +570,7 @@ export default function App() {
     applyDemo();
   }
   function applyDemo() {
+    setBountyCelebration(null);
     const demo = createDemoData();
     setProfile({ ...demo.profile, theme: data.profile.theme, language });
     setData((d) => ({
@@ -965,6 +1002,7 @@ export default function App() {
                     profile={data.profile}
                     language={language}
                     variant="overview"
+                    celebration={bountyCelebration?.page === "overview" ? bountyCelebration : null}
                     onAddExpense={() => setModal("new")}
                   />
                   {showDemoBanner && data.transactions.length === 0 && (
@@ -1912,6 +1950,7 @@ export default function App() {
                     profile={data.profile}
                     language={language}
                     variant="profile"
+                    celebration={bountyCelebration?.page === "profile" ? bountyCelebration : null}
                     onAddExpense={() => setModal("new")}
                   />
                   <ActivityCalendar
@@ -2060,6 +2099,7 @@ export default function App() {
                 variant={confirmation === "reset" ? "danger" : "primary"}
                 onClick={() => {
                   if (confirmation === "reset") {
+                    setBountyCelebration(null);
                     setData(createEmptyData());
                     setProfile(createEmptyData().profile);
                     setMonth(currentMonth());
@@ -2083,10 +2123,10 @@ export default function App() {
         )}
         {toast && (
           <div
-            className={`toast ${toast.error ? "toast-error" : ""}`}
+            className={`toast ${toast.error ? "toast-error" : ""} ${toast.pirate ? "toast--pirate" : ""}`}
             role={toast.error ? "alert" : "status"}
           >
-            {toast.error ? <CircleHelp size={19} /> : <CheckCheck size={19} />}
+            {toast.error ? <CircleHelp size={19} /> : toast.pirate ? <Sparkles size={19} /> : <CheckCheck size={19} />}
             <span>{tr(toast.message)}</span>
             {toast.undo && (
               <button className="toast-action" onClick={toast.undo}>

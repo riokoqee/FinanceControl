@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, CheckCircle2, Flame, Plus, Trophy } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Crown, Flame, Plus, Skull, Star, Trophy } from "lucide-react";
 import type { Language, Profile, Transaction } from "../lib/finance";
 import { todayString } from "../lib/finance";
 import { BERRIES_PER_DAY, getStreakStats } from "../lib/streak";
+import { getPirateProgress } from "../lib/pirateRanks";
+import type { StreakIncrease } from "../lib/pirateRanks";
 import "./StreakBounty.css";
+
+/** Transient UI feedback, created only by saving a new daily record. */
+export interface BountyCelebration extends StreakIncrease {
+  id: string;
+  expiresAt: number;
+}
 
 interface StreakBountyProps {
   transactions: Transaction[];
@@ -11,6 +19,7 @@ interface StreakBountyProps {
   language: Language;
   variant?: "overview" | "profile";
   onAddExpense?: () => void;
+  celebration?: BountyCelebration | null;
 }
 
 const copy = {
@@ -37,6 +46,9 @@ const copy = {
     fictional: "Игровая награда за вашу привычку",
     emptyStatus: "0 дней подряд",
     noPoster: "Первый день — первый постер WANTED",
+    progression: "Прогресс пиратского ранга",
+    promoted: "НОВЫЙ ПИРАТСКИЙ РАНГ",
+    legend: "Легенда морей достигнута",
   },
   en: {
     overview: "YOUR NEXT GREAT ADVENTURE",
@@ -61,6 +73,9 @@ const copy = {
     fictional: "An in-world reward for your habit",
     emptyStatus: "0 days in a row",
     noPoster: "First day, first WANTED poster",
+    progression: "Pirate rank progress",
+    promoted: "PIRATE RANK UNLOCKED",
+    legend: "Legend of the Seas achieved",
   },
 };
 
@@ -105,6 +120,42 @@ export function useStreakStats(transactions: readonly Transaction[]) {
   );
 }
 
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduced(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return reduced;
+}
+
+function useBountyAmount(bounty: number, celebration: BountyCelebration | null) {
+  const reduced = useReducedMotion();
+  const [animation, setAnimation] = useState<{ id: string; amount: number } | null>(null);
+  useEffect(() => {
+    if (!celebration || reduced) return;
+    let frame = 0;
+    const started = performance.now();
+    const update = (now: number) => {
+      const progress = Math.min(1, (now - started) / 1200);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setAnimation({
+        id: celebration.id,
+        amount: Math.round(celebration.fromBounty + (celebration.toBounty - celebration.fromBounty) * eased),
+      });
+      if (progress < 1) frame = requestAnimationFrame(update);
+    };
+    frame = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(frame);
+  }, [celebration, reduced]);
+  if (!celebration || reduced) return bounty;
+  return animation?.id === celebration.id ? animation.amount : celebration.fromBounty;
+}
+
 export function StreakBadge({
   transactions,
   language,
@@ -143,8 +194,12 @@ export default function StreakBounty({
   language,
   variant = "overview",
   onAddExpense,
+  celebration = null,
 }: StreakBountyProps) {
   const stats = useStreakStats(transactions);
+  const progression = getPirateProgress(stats.current);
+  const activeCelebration = celebration?.toDays === stats.current && stats.activeToday ? celebration : null;
+  const displayedBounty = useBountyAmount(stats.bounty, activeCelebration);
   const t = copy[language];
   const hasStreak = stats.current > 0;
   const formatBerries = (amount: number) =>
@@ -153,6 +208,12 @@ export default function StreakBounty({
     language === "en"
       ? `${dayLabel(stats.current, language)} in a row`
       : `${dayLabel(stats.current, language)} подряд`;
+  const progressLabel = progression.nextRank
+    ? language === "en"
+      ? `${dayLabel(progression.daysRemaining, language)} until ${progression.nextRank.name[language]}`
+      : `Ещё ${dayLabel(progression.daysRemaining, language)} до ранга «${progression.nextRank.name[language]}»`
+    : t.legend;
+  const RankSeal = progression.rank?.id === "legend" ? Crown : progression.rank?.id === "supernova" ? Star : Skull;
 
   return (
     <section
@@ -162,6 +223,7 @@ export default function StreakBounty({
       }
       data-streak={stats.current}
       data-active-today={stats.activeToday}
+      data-rank={progression.rank?.id ?? "none"}
     >
       <div className="streak-bounty-copy">
         <div className="streak-bounty-eyebrow">
@@ -214,6 +276,32 @@ export default function StreakBounty({
             </strong>
           </div>
         </div>
+        {progression.rank && (
+          <div className="pirate-progress" aria-label={t.progression}>
+            <div className="pirate-progress-heading">
+              <strong>{progression.rank.name[language]}</strong>
+              <span>{dayLabel(stats.current, language)}</span>
+            </div>
+            <div
+              className="pirate-progress-track"
+              role="progressbar"
+              aria-label={t.progression}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(progression.progress * 100)}
+              aria-valuetext={`${progression.rank.name[language]}. ${progressLabel}`}
+            >
+              <span style={{ transform: `scaleX(${progression.progress})` }} />
+            </div>
+            <p className="pirate-progress-caption">{progressLabel}</p>
+          </div>
+        )}
+        {activeCelebration?.promoted && (
+          <div className="pirate-promotion" key={activeCelebration.id}>
+            <Trophy size={20} aria-hidden="true" />
+            <span><small>{t.promoted}</small><strong>{activeCelebration.rank.name[language]}</strong></span>
+          </div>
+        )}
         <div className="streak-bounty-action-row">
           {onAddExpense && (
             <button
@@ -239,10 +327,13 @@ export default function StreakBounty({
 
       {hasStreak && (
         <figure
-          className="bounty-poster"
+          className={`bounty-poster ${activeCelebration ? "bounty-poster--increased" : ""}`}
           aria-label={`${t.reward}: ${formatBerries(stats.bounty)} ${t.berries}`}
           data-bounty={stats.bounty}
+          data-rank={progression.rank?.id}
         >
+          <div className="bounty-poster-paper">
+          <span className="bounty-poster-weathering" aria-hidden="true" />
           <div className="bounty-poster-frame">
             <span className="bounty-poster-wanted">WANTED</span>
             <div
@@ -253,22 +344,34 @@ export default function StreakBounty({
                 alt={t.portrait}
               />
               <span className="bounty-poster-stamp" aria-hidden="true">
-                B • L
+                {progression.rank?.id === "rookie" ? "B • L" : <RankSeal size={16} strokeWidth={1.4} />}
               </span>
             </div>
             <span className="bounty-poster-alive">DEAD OR ALIVE</span>
             <span className="bounty-poster-name">{profile.name}</span>
-            <div className="bounty-poster-amount" key={stats.bounty}>
+            <div className="bounty-poster-amount">
               <span className="bounty-berry" aria-hidden="true">
                 B
               </span>
-              <strong>{formatBerries(stats.bounty)}</strong>
+              <strong aria-hidden="true">{formatBerries(displayedBounty)}</strong>
             </div>
-            <figcaption className="bounty-poster-footer">
+            <div className="bounty-poster-footer">
               <span>MARINE</span>
               <span>BELILOG • GRAND LINE</span>
-            </figcaption>
+            </div>
           </div>
+          </div>
+          <div className="bounty-poster-effects" aria-hidden="true">
+            <span className="bounty-flame"><i /><i /><i /></span>
+            {Array.from({ length: 6 }, (_, index) => <i className="bounty-ember" key={`ember-${index}`} />)}
+            {Array.from({ length: 3 }, (_, index) => <i className="bounty-ash" key={`ash-${index}`} />)}
+          </div>
+          {activeCelebration && (
+            <div className="bounty-burst" key={activeCelebration.id} aria-hidden="true">
+              <span className="bounty-increased-stamp">BOUNTY INCREASED</span>
+              {Array.from({ length: 6 }, (_, index) => <i className="bounty-gold-spark" key={index} />)}
+            </div>
+          )}
           <span className="bounty-poster-note">{t.fictional}</span>
         </figure>
       )}
