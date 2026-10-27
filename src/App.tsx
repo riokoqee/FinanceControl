@@ -64,7 +64,11 @@ import type {
 
 import ActivityCalendar from "./components/ActivityCalendar";
 import EntryDetails from "./components/EntryDetails";
-import { prepareAvatar } from "./lib/avatar";
+import AvatarCropper from "./components/AvatarCropper";
+import StreakBounty, {
+  StreakBadge,
+  useStreakStats,
+} from "./components/StreakBounty";
 import { LanguageProvider, translate, useI18n } from "./lib/i18n";
 import type { Language } from "./lib/finance";
 
@@ -153,6 +157,7 @@ function CategoryIcon({ category }: { category: CategoryId }) {
 export default function App() {
   const [data, setData] = useState<AppData>(loadData);
   const language = data.profile.language;
+  const streak = useStreakStats(data.transactions);
   const tr = (text: string) => translate(language, text);
   const [page, setPage] = useState<Page>(readPage);
   const [month, setMonth] = useState(currentMonth);
@@ -163,7 +168,10 @@ export default function App() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [pendingImport, setPendingImport] = useState<AppData | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
-  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarSource, setAvatarSource] = useState<{
+    file?: File;
+    src?: string;
+  } | null>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [storageOk, setStorageOk] = useState(true);
@@ -502,23 +510,14 @@ export default function App() {
         : "Копия импортирована. Дубликаты пропущены.",
     });
   }
-  async function uploadAvatar(file?: File) {
-    if (!file) return;
-    setAvatarBusy(true);
-    try {
-      const avatar = await prepareAvatar(file);
-      setProfile((p) => ({ ...p, avatar }));
-      setData((d) => ({ ...d, profile: { ...d.profile, avatar } }));
-      setToast({ message: "Аватар сохранён" });
-    } catch {
-      setToast({
-        message:
-          "Не удалось загрузить аватар. Выберите PNG, JPG или WebP до 8 МБ.",
-        error: true,
-      });
-    } finally {
-      setAvatarBusy(false);
-    }
+  function selectAvatar(file?: File) {
+    if (file) setAvatarSource({ file });
+  }
+  function saveAvatar(avatar: string) {
+    setProfile((p) => ({ ...p, avatar }));
+    setData((d) => ({ ...d, profile: { ...d.profile, avatar } }));
+    setAvatarSource(null);
+    setToast({ message: "Аватар сохранён" });
   }
   function startDemo() {
     if (
@@ -772,7 +771,7 @@ export default function App() {
             </div>
             <div className="sidebar-foot">
               <span>Every Berry Counts.</span>
-              <span>v2.0</span>
+              <span>v2.1</span>
             </div>
           </div>
         </aside>
@@ -784,6 +783,11 @@ export default function App() {
               <strong>{tr(pageLabels[page])}</strong>
             </div>
             <div className="topbar-actions">
+              <StreakBadge
+                transactions={data.transactions}
+                language={language}
+                onClick={() => navigate("overview")}
+              />
               <span className="local-chip">
                 <span className="status-dot" />
                 {tr("Локально")}
@@ -934,26 +938,35 @@ export default function App() {
               )}
               {page === "overview" && (
                 <>
-                  <section className="voyage-banner" aria-label="BeliLog">
-                    <div className="voyage-copy">
-                      <span className="voyage-kicker">
-                        BeliLog · Grand Line Ledger
-                      </span>
-                      <strong>{tr("Навстречу своим сокровищам")}</strong>
-                      <p>
-                        {tr(
-                          "Ваши финансы — ваше приключение. Следите за каждым бери и держите курс к своим целям.",
-                        )}
-                      </p>
-                      <span className="voyage-meta">
-                        <ShieldCheck size={13} />
-                        {tr("Личный журнал · Без облака")}
-                      </span>
-                    </div>
-                    <div className="voyage-art" aria-hidden="true">
-                      <img src="/straw-hat.png" alt="" />
-                    </div>
-                  </section>
+                  {streak.current === 0 && (
+                    <section className="voyage-banner" aria-label="BeliLog">
+                      <div className="voyage-copy">
+                        <span className="voyage-kicker">
+                          BeliLog · Grand Line Ledger
+                        </span>
+                        <strong>{tr("Навстречу своим сокровищам")}</strong>
+                        <p>
+                          {tr(
+                            "Ваши финансы — ваше приключение. Следите за каждым бери и держите курс к своим целям.",
+                          )}
+                        </p>
+                        <span className="voyage-meta">
+                          <ShieldCheck size={13} />
+                          {tr("Личный журнал · Без облака")}
+                        </span>
+                      </div>
+                      <div className="voyage-art" aria-hidden="true">
+                        <img src="/belilog-icon-512.png" alt="" />
+                      </div>
+                    </section>
+                  )}
+                  <StreakBounty
+                    transactions={data.transactions}
+                    profile={data.profile}
+                    language={language}
+                    variant="overview"
+                    onAddExpense={() => setModal("new")}
+                  />
                   {showDemoBanner && data.transactions.length === 0 && (
                     <div className="demo-banner">
                       <span className="demo-icon">
@@ -1529,7 +1542,17 @@ export default function App() {
                       <UserRound size={20} className="muted-icon" />
                     </div>
                     <div className="profile-identity">
-                      <div className="profile-avatar">
+                      <button
+                        type="button"
+                        className="profile-avatar profile-avatar-edit"
+                        aria-label={tr("Редактировать аватар")}
+                        title={tr("Редактировать аватар")}
+                        onClick={() =>
+                          data.profile.avatar
+                            ? setAvatarSource({ src: data.profile.avatar })
+                            : avatarRef.current?.click()
+                        }
+                      >
                         {data.profile.avatar ? (
                           <img
                             src={data.profile.avatar}
@@ -1538,7 +1561,13 @@ export default function App() {
                         ) : (
                           initials || tr("П")
                         )}
-                      </div>
+                        <span
+                          className="profile-avatar-edit-icon"
+                          aria-hidden="true"
+                        >
+                          <Camera size={13} />
+                        </span>
+                      </button>
                       <div>
                         <strong>
                           {data.profile.name === "Пользователь"
@@ -1553,13 +1582,20 @@ export default function App() {
                     </div>
                     <div className="avatar-editor">
                       <div className="avatar-editor-actions">
-                        <Button
-                          onClick={() => avatarRef.current?.click()}
-                          disabled={avatarBusy}
-                        >
+                        <Button onClick={() => avatarRef.current?.click()}>
                           <Camera size={15} />
-                          {avatarBusy ? "…" : tr("Сменить аватар")}
+                          {tr("Сменить аватар")}
                         </Button>
+                        {data.profile.avatar && (
+                          <Button
+                            onClick={() =>
+                              setAvatarSource({ src: data.profile.avatar })
+                            }
+                          >
+                            <Pencil size={15} />
+                            {tr("Редактировать аватар")}
+                          </Button>
+                        )}
                         {data.profile.avatar && (
                           <Button
                             onClick={() => {
@@ -1577,7 +1613,7 @@ export default function App() {
                       </div>
                       <span className="field-hint">
                         {tr(
-                          "PNG, JPG или WebP до 8 МБ. Изображение сохранится на устройстве.",
+                          "Переместите и увеличьте фото перед сохранением. PNG, JPG или WebP до 8 МБ.",
                         )}
                       </span>
                       <input
@@ -1587,7 +1623,7 @@ export default function App() {
                         accept="image/png,image/jpeg,image/webp"
                         aria-label={tr("Выбрать аватар")}
                         onChange={(e) => {
-                          void uploadAvatar(e.target.files?.[0]);
+                          selectAvatar(e.target.files?.[0]);
                           e.target.value = "";
                         }}
                       />
@@ -1871,6 +1907,13 @@ export default function App() {
                       </p>
                     </div>
                   </div>
+                  <StreakBounty
+                    transactions={data.transactions}
+                    profile={data.profile}
+                    language={language}
+                    variant="profile"
+                    onAddExpense={() => setModal("new")}
+                  />
                   <ActivityCalendar
                     transactions={data.transactions}
                     language={language}
@@ -1880,6 +1923,20 @@ export default function App() {
             </div>
           </main>
         </div>
+        {avatarSource && (
+          <Modal
+            className="avatar-crop-modal"
+            label={tr("Редактор аватара")}
+            onClose={() => setAvatarSource(null)}
+          >
+            <AvatarCropper
+              {...avatarSource}
+              language={language}
+              onSave={saveAvatar}
+              onClose={() => setAvatarSource(null)}
+            />
+          </Modal>
+        )}
         {detailRecord && !modal && (
           <Modal className="detail-modal" onClose={() => setDetailId(null)}>
             <EntryDetails
@@ -2221,10 +2278,12 @@ function Modal({
   children,
   onClose,
   className = "",
+  label,
 }: {
   children: ReactNode;
   onClose: () => void;
   className?: string;
+  label?: string;
 }) {
   const { tr } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
@@ -2278,7 +2337,7 @@ function Modal({
         className={`modal ${className}`}
         role="dialog"
         aria-modal="true"
-        aria-label={tr("Управление расходами")}
+        aria-label={label ?? tr("Управление расходами")}
         ref={ref}
       >
         {children}

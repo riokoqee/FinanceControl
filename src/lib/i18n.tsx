@@ -3,6 +3,10 @@ import type { ReactNode } from "react";
 import type { Language } from "./finance";
 
 const english: Readonly<Record<string, string>> = {
+  "Редактировать аватар": "Edit avatar",
+  "Редактор аватара": "Avatar editor",
+  "Переместите и увеличьте фото перед сохранением. PNG, JPG или WebP до 8 МБ.":
+    "Move and zoom your photo before saving. PNG, JPG or WebP up to 8 MB.",
   "Аватар пользователя": "User avatar",
   "Выбрать аватар": "Choose avatar",
   "Файл слишком большой. Максимум — 40 МБ.":

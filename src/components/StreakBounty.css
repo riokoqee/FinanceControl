@@ -1,0 +1,112 @@
+.streak-nav-badge { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-muted); color: var(--muted); font-size: 12px; font-weight: 650; white-space: nowrap; }
+.streak-nav-badge:hover { border-color: var(--gold); background: var(--surface-hover); }
+.streak-nav-badge--active { color: var(--accent-strong); border-color: var(--line); background: var(--accent-soft); }
+.streak-nav-badge--active > svg { fill: #c35d4c20; }
+.streak-nav-badge-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--green); }
+
+.streak-bounty {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 214px;
+  align-items: center;
+  gap: clamp(22px, 4vw, 60px);
+  min-width: 0;
+  margin: 0 0 22px;
+  padding: 25px 30px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(120deg, var(--surface) 55%, var(--surface-muted));
+  animation: bounty-arrive .45s ease-out both;
+}
+
+.streak-bounty--profile { grid-column: 1 / -1; margin-bottom: 0; }
+.streak-bounty--empty { grid-template-columns: minmax(0, 1fr); padding: 23px 28px; }
+.streak-bounty-copy { position: relative; min-width: 0; }
+.streak-bounty-eyebrow { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; color: var(--accent-strong); font-size: 11px; font-weight: 750; letter-spacing: 1.4px; }
+.streak-bounty-eyebrow > svg { fill: #c35d4c15; }
+.streak-bounty-title { display: flex; align-items: center; gap: 12px; margin: 0 0 9px; color: var(--ink); font-size: clamp(22px, 2.3vw, 30px); font-weight: 650; line-height: 1.25; letter-spacing: -.9px; }
+.streak-bounty-title-spark { color: var(--gold); font-size: 22px; font-weight: 400; }
+.streak-bounty-description { max-width: 490px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.streak-bounty-status { display: flex; align-items: center; gap: 7px; width: fit-content; margin-top: 15px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--accent-strong); background: var(--accent-soft); font-size: 13px; font-weight: 600; line-height: 1.6; }
+.streak-bounty-status--done { border-color: transparent; color: var(--green); background: var(--green-soft); }
+.streak-bounty-first-day { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 14px; color: var(--muted); font-size: 11px; line-height: 1.7; }
+.streak-bounty-first-day > span { display: flex; align-items: center; gap: 6px; color: var(--subtle); font-weight: 650; }
+.streak-bounty-metrics { display: flex; flex-wrap: wrap; gap: 14px 28px; margin: 21px 0 19px; }
+.streak-bounty-metrics > div { min-width: 0; }
+.streak-bounty-metrics > div + div { border-left: 1px solid var(--line); padding-left: 27px; }
+.streak-bounty-metrics > div > span { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; color: var(--muted); font-size: 11px; }
+.streak-bounty-metrics strong { display: block; color: var(--ink); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.streak-bounty-metrics small { color: var(--muted); font-size: 11px; font-weight: 500; }
+.streak-bounty-action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 13px 18px; }
+.streak-bounty-cta { min-height: 40px; font-size: 12px; }
+.streak-bounty-next { min-width: 0; }
+.streak-bounty-next > span { display: block; margin-bottom: 3px; color: var(--muted); font-size: 11px; }
+.streak-bounty-next > strong { display: flex; align-items: center; gap: 3px; color: var(--green); font-size: 12px; font-weight: 650; }
+
+.bounty-poster {
+  position: relative;
+  width: 214px;
+  min-width: 0;
+  margin: 1px 0 15px;
+  padding: 10px;
+  color: #4d3825;
+  background:
+    radial-gradient(ellipse at 0 0, #88603130, transparent 45%),
+    radial-gradient(ellipse at 100% 100%, #8860312c, transparent 50%),
+    repeating-linear-gradient(0deg, #6d4d2612 0, #6d4d2612 1px, transparent 1px, transparent 4px),
+    #ead9b3;
+  border: 1px solid #c1a679;
+  box-shadow: 1px 6px 12px #101d2c1c, 0 1px 2px #5c43252e;
+  transform: rotate(2deg);
+  transition: transform .3s ease, box-shadow .3s ease;
+  animation: bounty-poster-arrive .6s cubic-bezier(.22, 1, .36, 1) both;
+  color-scheme: light;
+}
+.bounty-poster:hover { transform: rotate(0); box-shadow: 1px 8px 19px #101d2c26; }
+.bounty-poster-frame { display: flex; flex-direction: column; align-items: center; padding: 6px 7px 7px; border: 2px solid #765737; outline: 1px solid #76573780; outline-offset: 3px; }
+.bounty-poster-wanted { width: 100%; padding-bottom: 3px; text-align: center; font-family: Georgia, 'Times New Roman', serif; font-size: 36px; font-weight: 900; letter-spacing: 1px; line-height: 1.15; }
+.bounty-poster-portrait { position: relative; width: 100%; height: 95px; overflow: hidden; border: 2px solid #765737; background: #d8c8a6; }
+.bounty-poster-portrait > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.bounty-poster-portrait--hat { background: radial-gradient(ellipse at 50% 70%, #c7ac755c, transparent 70%), #e4d3ad; }
+.bounty-poster-portrait--hat > img { object-fit: contain; padding: 6px; }
+.bounty-poster-stamp { position: absolute; right: 6px; bottom: 5px; display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid #8f493c80; border-radius: 50%; color: #8f493c; background: #ead9b345; font-family: Georgia, serif; font-size: 8px; font-weight: bold; transform: rotate(-16deg); }
+.bounty-poster-alive { margin-top: 7px; font-family: Georgia, 'Times New Roman', serif; font-size: 11px; font-weight: 700; letter-spacing: 2px; }
+.bounty-poster-name { max-width: 100%; margin-top: 4px; overflow-wrap: anywhere; text-align: center; font-family: Georgia, 'Times New Roman', serif; font-size: 16px; font-weight: 800; line-height: 1.1; letter-spacing: .3px; text-transform: uppercase; }
+.bounty-poster-amount { display: flex; align-items: center; justify-content: center; gap: 7px; max-width: 100%; margin: 6px 0 7px; animation: bounty-reward .65s ease-out both; }
+.bounty-poster-amount > strong { min-width: 0; overflow-wrap: anywhere; font-family: Georgia, 'Times New Roman', serif; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: .2px; }
+.bounty-berry { position: relative; flex: 0 0 auto; font-family: Georgia, 'Times New Roman', serif; font-size: 23px; font-weight: 700; line-height: 1; }
+.bounty-berry::after { position: absolute; top: 3px; bottom: -1px; left: 45%; width: 2px; background: currentColor; content: ''; }
+.bounty-poster-footer { display: flex; align-items: end; justify-content: space-between; gap: 6px; width: 100%; padding-top: 5px; border-top: 1px solid #76573799; }
+.bounty-poster-footer > span:first-child { font-family: Georgia, 'Times New Roman', serif; font-size: 11px; font-weight: 800; letter-spacing: 1px; }
+.bounty-poster-footer > span:last-child { max-width: 75px; color: #705a40; text-align: right; font-size: 5px; line-height: 1.4; letter-spacing: .3px; }
+.bounty-poster-note { position: absolute; top: calc(100% + 8px); left: -12px; width: calc(100% + 24px); color: var(--muted); text-align: center; font-family: var(--font); font-size: 11px; line-height: 1.5; }
+
+@keyframes bounty-arrive { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes bounty-poster-arrive { from { opacity: 0; transform: translateY(10px) rotate(5deg); } to { opacity: 1; transform: translateY(0) rotate(2deg); } }
+@keyframes bounty-reward { from { opacity: .4; transform: translateY(4px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+@media (max-width: 900px) and (min-width: 701px) {
+  .streak-bounty { grid-template-columns: minmax(0, 1fr) 190px; gap: 22px; padding: 24px; }
+  .bounty-poster { width: 190px; }
+  .bounty-poster-wanted { font-size: 30px; }
+  .bounty-poster-amount > strong { font-size: 20px; }
+  .streak-bounty-metrics { gap: 17px; }
+  .streak-bounty-metrics > div + div { padding-left: 17px; }
+}
+
+@media (max-width: 600px) {
+  .streak-bounty { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 23px 21px 28px; }
+  .streak-bounty--empty { padding: 22px 20px; }
+  .streak-bounty-title { font-size: 24px; }
+  .streak-bounty--empty .streak-bounty-title { font-size: 22px; }
+  .streak-bounty-description { font-size: 13px; }
+  .streak-bounty-metrics { gap: 14px 20px; }
+  .streak-bounty-metrics > div + div { padding-left: 20px; }
+  .bounty-poster { justify-self: center; width: 214px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streak-bounty, .bounty-poster, .bounty-poster-amount { animation: none; }
+  .bounty-poster { transition: none; }
+}

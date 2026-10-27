@@ -1,0 +1,37 @@
+/* Quiet feedback for the actions that matter. */
+.profile-avatar-edit { position: relative; padding: 0; cursor: pointer; font: inherit; font-size: 21px; }
+.profile-avatar-edit:hover, .profile-avatar-edit:focus-visible { border-color: var(--gold); box-shadow: 0 0 0 3px #d7b77730; }
+.profile-avatar-edit-icon { position: absolute; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; height: 21px; background: #101d2cb8; color: #f1e5cb; opacity: 0; transition: opacity .18s ease; }
+.profile-avatar-edit:hover .profile-avatar-edit-icon, .profile-avatar-edit:focus-visible .profile-avatar-edit-icon { opacity: 1; }
+.button { transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.button:not(:disabled):active, .icon-button:not(:disabled):active { transform: translateY(1px) scale(.98); }
+.overview-stats > .stat-card { animation: ledger-arrive .48s cubic-bezier(.2,.7,.3,1) backwards; transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.overview-stats > .stat-card:nth-child(2) { animation-delay: 55ms; }
+.overview-stats > .stat-card:nth-child(3) { animation-delay: 110ms; }
+.voyage-art img { animation: hat-arrive .75s cubic-bezier(.2,.7,.3,1) backwards; transform-origin: 50% 65%; }
+.toast > svg { animation: confirmation-arrive .35s cubic-bezier(.2,.8,.3,1.2); }
+.transaction-open { transition: color .15s ease, background .15s ease; }
+.transaction-open:hover .transaction-icon { transform: translateY(-1px); }
+.transaction-icon { transition: background .18s ease, transform .18s ease; }
+.category-option { transition: background .18s ease, color .18s ease, border-color .18s ease, transform .18s ease; }
+.category-option:active { transform: scale(.97); }
+.budget-fill, .item-progress > span { transition: width .6s cubic-bezier(.2,.7,.3,1); }
+@keyframes ledger-arrive { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes hat-arrive { from { opacity: 0; transform: translateY(12px) rotate(-11deg) scale(.95); } to { opacity: 1; transform: translateY(0) rotate(-5deg) scale(1); } }
+@keyframes confirmation-arrive { from { opacity: 0; transform: scale(.65); } to { opacity: 1; transform: scale(1); } }
+@media (hover: hover) and (pointer: fine) {
+  .overview-stats > .stat-card:hover { transform: translateY(-2px); border-color: #d7b77780; box-shadow: 0 10px 25px -20px #101d2c55; }
+}
+@media (max-width: 600px) {
+  .topbar .breadcrumb > span:first-child, .topbar .breadcrumb > svg { display: none; }
+  .topbar .local-chip { display: none; }
+  .topbar .breadcrumb { min-width: 0; }
+  .topbar .breadcrumb > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar-actions { flex-shrink: 0; }
+  .profile-avatar-edit-icon { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .overview-stats > .stat-card, .voyage-art img, .toast > svg { animation: none !important; }
+  .button, .icon-button, .stat-card, .transaction-icon, .category-option, .profile-avatar-edit-icon, .budget-fill, .item-progress > span { transition: none !important; }
+  .button:active, .icon-button:active, .stat-card:hover, .transaction-open:hover .transaction-icon, .category-option:active { transform: none !important; }
+}
