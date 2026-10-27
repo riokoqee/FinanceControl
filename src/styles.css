@@ -1250,11 +1250,11 @@ body {
   height: 44px;
   flex-shrink: 0;
   padding: 2px;
-  border: 1px solid #d7b77750;
-  border-radius: 12px;
-  background: #101d2c;
-  overflow: hidden;
-  box-shadow: inset 0 0 15px #d7b7770a;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+  box-shadow: none;
 }
 .brand-mark img { display: block; width: 100%; height: 100%; max-width: 100%; object-fit: contain; flex-shrink: 0; }
 .brand-name { font-size: 24px; letter-spacing: -1px; font-weight: 800; }
