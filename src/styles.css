@@ -1507,10 +1507,11 @@ html[data-theme='dark'] .activity-day.activity-selected { outline-color: var(--g
   .nav-item.nav-active::before { display: none; }
 }
 @media (max-width: 760px) {
-  .voyage-banner { min-height: 166px; margin-top: 0; }
-  .voyage-copy { max-width: 65%; }
+  .voyage-banner { display: grid; grid-template-columns: minmax(0, 1fr) minmax(110px, 30%); gap: 20px; min-height: 166px; margin-top: 0; }
+  .voyage-copy { max-width: none; }
   .voyage-copy > strong { font-size: 24px; }
-  .voyage-art { right: -35px; }
+  .voyage-art { position: relative; right: auto; top: auto; width: 100%; height: auto; aspect-ratio: 1; transform: none; }
+  .voyage-art img { display: block; width: 100%; height: 100%; transform: none; }
   .activity-panel { padding: 22px; }
   .activity-header { margin-bottom: 18px; }
 }
@@ -1525,14 +1526,12 @@ html[data-theme='dark'] .activity-day.activity-selected { outline-color: var(--g
   .avatar { width: 34px; height: 34px; }
   .workspace { padding-bottom: 110px; }
   .voyage-banner { min-height: 173px; margin-bottom: 20px; padding: 22px; }
-  .voyage-copy { max-width: 69%; }
+  .voyage-copy { max-width: none; }
   .voyage-kicker { margin-bottom: 10px; font-size: 8px; letter-spacing: 1.4px; }
   .voyage-kicker::before { width: 11px; }
   .voyage-copy > strong { font-size: 23px; letter-spacing: -.7px; }
   .voyage-copy p { font-size: 11px; line-height: 1.7; }
   .voyage-meta { margin-top: 11px; font-size: 9px; }
-  .voyage-art { right: -74px; width: 210px; height: 160px; top: 54%; }
-  .voyage-art img { width: 280px; height: 187px; transform: rotate(-14deg); opacity: .85; }
   .voyage-art::before { width: 112px; height: 112px; }
   .voyage-art::after { display: none; }
   .voyage-banner::after { right: 0; width: 65%; }
@@ -1587,13 +1586,15 @@ html[data-theme='dark'] .activity-day.activity-selected { outline-color: var(--g
   .detail-meta { font-size: 11px; }
   .toast { bottom: 93px; }
 }
+@media (max-width: 480px) {
+  .voyage-banner { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .voyage-art { width: 140px; max-width: 100%; justify-self: center; }
+}
 @media (max-width: 370px) {
   .workspace { padding-left: 15px; padding-right: 15px; }
   .voyage-banner { padding: 19px; }
-  .voyage-copy { max-width: 74%; }
   .voyage-copy > strong { font-size: 21px; }
-  .voyage-art { right: -83px; }
-  .voyage-art img { width: 255px; }
+  .voyage-art { width: 128px; }
   .stat-card { padding-left: 14px; padding-right: 14px; }
   .stat-label, .stat-footer { font-size: 11px; }
   .nav-item { font-size: 11px; padding-left: 5px; padding-right: 5px; }
