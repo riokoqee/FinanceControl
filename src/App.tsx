@@ -65,6 +65,8 @@ import type {
 import ActivityCalendar from "./components/ActivityCalendar";
 import EntryDetails from "./components/EntryDetails";
 import AvatarCropper from "./components/AvatarCropper";
+import ShoppingList from "./components/ShoppingList";
+import { addShoppingItem, removeShoppingItem, saveShoppingPrice, updateShoppingItem } from "./lib/shopping";
 import StreakBounty, {
   StreakBadge,
   useStreakStats,
@@ -75,7 +77,7 @@ import { getStreakIncrease } from "./lib/pirateRanks";
 import { LanguageProvider, translate, useI18n } from "./lib/i18n";
 import type { Language } from "./lib/finance";
 
-type Page = "overview" | "tracker" | "profile";
+type Page = "overview" | "tracker" | "shopping" | "profile";
 type Toast = { message: string; error?: boolean; undo?: () => void; pirate?: boolean };
 const categoryIcons: Record<CategoryId, LucideIcon> = {
   food: Utensils,
@@ -98,6 +100,7 @@ const categoryColors: Record<CategoryId, string> = {
 const pageLabels: Record<Page, string> = {
   overview: "Обзор",
   tracker: "Трекер расходов",
+  shopping: "Список покупок",
   profile: "Мой профиль",
 };
 const monthLabel = (month: string, language: Language = "ru") =>
@@ -114,7 +117,10 @@ const localDate = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 function readPage(): Page {
   const value = window.location.hash.slice(1);
-  return value === "tracker" || value === "profile" ? value : "overview";
+  return value === "tracker" || value === "shopping" || value === "profile" ? value : "overview";
+}
+function createRecordId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 function Button({
   children,
@@ -424,6 +430,11 @@ export default function App() {
       transactions: editing
         ? d.transactions.map((t) => (t.id === value.id ? value : t))
         : [value, ...d.transactions],
+      ...(editing && d.shoppingList ? {
+        shoppingList: d.shoppingList.map((item) => item.transactionId === value.id
+          ? { ...item, title: value.title, currency: value.currency }
+          : item),
+      } : {}),
     }));
     setMonth(value.date.slice(0, 7));
     setModal(null);
@@ -442,11 +453,65 @@ export default function App() {
       pirate: increase?.promoted,
     });
   }
+  function commitShoppingChange(change: (current: AppData) => AppData): AppData | null {
+    try {
+      const next = change(latest.current.data);
+      if (!saveData(next)) {
+        setStorageOk(false);
+        setToast({ message: "Не удалось сохранить изменения в браузере.", error: true });
+        return null;
+      }
+      // Several rows may flush together on navigation or when the tab closes.
+      // Keep each write based on the previous write, even before React renders.
+      latest.current = { ...latest.current, data: next };
+      setData(next);
+      setStorageOk(true);
+      return next;
+    } catch (error) {
+      setToast({ message: error instanceof Error ? error.message : "Не удалось сохранить изменения в браузере.", error: true });
+      return null;
+    }
+  }
+  function addPlannedItem(title: string, itemCurrency: Currency): boolean {
+    return Boolean(commitShoppingChange((current) => addShoppingItem(current, {
+      id: createRecordId(), title, currency: itemCurrency, createdAt: todayString(),
+    })));
+  }
+  function updatePlannedItem(id: string, patch: { title?: string; currency?: Currency }): boolean {
+    return Boolean(commitShoppingChange((current) => updateShoppingItem(current, id, patch)));
+  }
+  function savePlannedPrice(id: string, amount: number, itemCurrency: Currency): boolean {
+    const previous = latest.current.data;
+    const now = new Date();
+    const eventId = createRecordId();
+    const next = commitShoppingChange((current) => saveShoppingPrice(current, id, amount, itemCurrency, eventId, now));
+    if (!next) return false;
+    const increase = next.transactions.length > previous.transactions.length
+      ? getStreakIncrease(getStreakStats(previous.transactions, now), getStreakStats(next.transactions, now))
+      : null;
+    setBountyCelebration(increase ? { ...increase, id: eventId, expiresAt: Date.now() + 6000, page } : null);
+    if (increase?.promoted) {
+      setToast({
+        message: `${language === "en" ? "New pirate rank" : "Новый пиратский ранг"}: ${increase.rank.name[language]}!`,
+        pirate: true,
+      });
+    }
+    return true;
+  }
+  function removePlannedItem(id: string): boolean {
+    return Boolean(commitShoppingChange((current) => removeShoppingItem(current, id)));
+  }
   function deleteTransaction(transaction: Transaction) {
     setBountyCelebration(null);
+    const linkedItems = new Set(latest.current.data.shoppingList?.filter((item) => item.transactionId === transaction.id).map((item) => item.id));
     setData((d) => ({
       ...d,
       transactions: d.transactions.filter((t) => t.id !== transaction.id),
+      ...(d.shoppingList ? { shoppingList: d.shoppingList.map((item) => {
+        if (item.transactionId !== transaction.id) return item;
+        const { transactionId: _removed, ...pending } = item;
+        return pending;
+      }) } : {}),
     }));
     setToast({
       message: "Расход удалён",
@@ -454,7 +519,12 @@ export default function App() {
         setData((d) =>
           d.transactions.some((t) => t.id === transaction.id)
             ? d
-            : { ...d, transactions: [...d.transactions, transaction] },
+            : {
+                ...d,
+                transactions: [...d.transactions, transaction],
+                ...(d.shoppingList ? { shoppingList: d.shoppingList.map((item) =>
+                  linkedItems.has(item.id) && !item.transactionId ? { ...item, transactionId: transaction.id } : item) } : {}),
+              },
         );
         setToast({ message: "Расход восстановлен" });
       },
@@ -536,7 +606,20 @@ export default function App() {
         });
         return;
       }
-      setData((d) => ({ ...d, transactions }));
+      const shoppingList = [...(data.shoppingList ?? [])];
+      const shoppingIds = new Set(shoppingList.map((item) => item.id));
+      const linkedExpenses = new Set(shoppingList.flatMap((item) => item.transactionId ? [item.transactionId] : []));
+      for (const item of pendingImport.shoppingList ?? []) {
+        if (shoppingIds.has(item.id) || (item.transactionId && linkedExpenses.has(item.transactionId))) continue;
+        shoppingList.push(item);
+        shoppingIds.add(item.id);
+        if (item.transactionId) linkedExpenses.add(item.transactionId);
+      }
+      if (shoppingList.length > 1000) {
+        setToast({ message: "В списке покупок может быть не больше 1000 товаров.", error: true });
+        return;
+      }
+      setData({ ...data, transactions, ...((data.shoppingList || pendingImport.shoppingList) ? { shoppingList } : {}) });
     }
     setPendingImport(null);
     setDetailId(null);
@@ -558,6 +641,7 @@ export default function App() {
   function startDemo() {
     if (
       data.transactions.length ||
+      data.shoppingList?.length ||
       data.profile.name !== "Пользователь" ||
       data.profile.email ||
       data.profile.avatar ||
@@ -763,9 +847,10 @@ export default function App() {
           <nav className="nav-list" aria-label={tr("Основная навигация")}>
             {(
               [
-                { id: "overview", label: tr("Обзор"), icon: LayoutDashboard },
-                { id: "tracker", label: tr("Трекер расходов"), icon: Wallet },
-                { id: "profile", label: tr("Мой профиль"), icon: UserRound },
+                { id: "overview", label: tr("Обзор"), shortLabel: tr("Обзор"), icon: LayoutDashboard },
+                { id: "tracker", label: tr("Трекер расходов"), shortLabel: tr("Трекер"), icon: Wallet },
+                { id: "shopping", label: tr("Список покупок"), shortLabel: tr("Покупки"), icon: ListChecks },
+                { id: "profile", label: tr("Мой профиль"), shortLabel: tr("Профиль"), icon: UserRound },
               ] as const
             ).map((item) => (
               <a
@@ -773,10 +858,11 @@ export default function App() {
                 href={`#${item.id}`}
                 className={`nav-item ${page === item.id ? "nav-active" : ""}`}
                 aria-current={page === item.id ? "page" : undefined}
+                aria-label={item.label}
                 onClick={() => navigate(item.id)}
               >
                 <item.icon size={19} strokeWidth={1.7} />
-                <span>{tr(item.label)}</span>
+                <span className="nav-label"><span className="nav-label-full">{item.label}</span><span className="nav-label-short">{item.shortLabel}</span></span>
                 {item.id === "tracker" && data.transactions.length > 0 && (
                   <span className="nav-count">{data.transactions.length}</span>
                 )}
@@ -889,6 +975,8 @@ export default function App() {
                       ? tr("МЕНЬШЕ ХАОСА. БОЛЬШЕ ЯСНОСТИ.")
                       : page === "tracker"
                         ? tr("У КАЖДОЙ ПОКУПКИ ЕСТЬ ИСТОРИЯ")
+                        : page === "shopping"
+                          ? tr("СНАЧАЛА СПИСОК. ПОТОМ ПОКУПКА.")
                         : tr("ПРОСТРАНСТВО, КОТОРОЕ ПОДСТРАИВАЕТСЯ ПОД ВАС")}
                   </div>
                   <h1>
@@ -902,11 +990,13 @@ export default function App() {
                       ? tr("Ваши расходы, привычки и немного спокойствия.")
                       : page === "tracker"
                         ? tr("Записывайте важное. Замечайте повседневное.")
+                        : page === "shopping"
+                          ? tr("Запланируйте продукты, а после покупки укажите цену — всё сохранится автоматически.")
                         : tr("Ваши настройки и данные — в одном месте.")}
                   </p>
                 </div>
                 <div className="header-actions">
-                  {page !== "profile" && (
+                  {(page === "overview" || page === "tracker") && (
                     <>
                       <Button
                         className="export-button"
@@ -924,7 +1014,7 @@ export default function App() {
                   )}
                 </div>
               </div>
-              {page !== "profile" && (
+              {(page === "overview" || page === "tracker") && (
                 <div className="period-bar">
                   <div className="month-control">
                     <button
@@ -1401,6 +1491,18 @@ export default function App() {
                     </span>
                   </p>
                 </>
+              )}
+              {page === "shopping" && (
+                <ShoppingList
+                  items={data.shoppingList ?? []}
+                  transactions={data.transactions}
+                  defaultCurrency={currency}
+                  language={language}
+                  onAdd={addPlannedItem}
+                  onPriceChange={savePlannedPrice}
+                  onUpdate={updatePlannedItem}
+                  onRemove={removePlannedItem}
+                />
               )}
               {page === "tracker" && (
                 <>
@@ -1917,7 +2019,7 @@ export default function App() {
                       </div>
                       <p className="field-hint">
                         {tr(
-                          "PDF со всеми записями, аватаром и настройками. Подходит для восстановления.",
+                          "PDF со всеми записями, списком покупок, аватаром и настройками. Подходит для восстановления.",
                         )}
                       </p>
                     </section>
@@ -1941,7 +2043,7 @@ export default function App() {
                         {tr("Удалить все данные")}
                       </button>
                       <p>
-                        {tr("Удаляет профиль и расходы из этого браузера.")}
+                        {tr("Удаляет профиль, расходы и список покупок из этого браузера.")}
                       </p>
                     </div>
                   </div>
@@ -2023,12 +2125,13 @@ export default function App() {
             </p>
             <p className="field-hint">
               {tr(
-                "Восстановить всё заменит текущие расходы, профиль и настройки.",
+                "Восстановить всё заменит текущие расходы, список покупок, профиль и настройки.",
               )}
             </p>
             <div className="import-summary">
               <strong>{pendingImport.transactions.length}</strong>{" "}
               {tr("записей")} · {pendingImport.profile.name}
+              {Boolean(pendingImport.shoppingList?.length) && <span> · {tr("Список покупок")}: {pendingImport.shoppingList!.length}</span>}
             </div>
             <div className="import-actions">
               <Button onClick={() => restoreBackup(false)}>
@@ -2079,10 +2182,10 @@ export default function App() {
             <p className="modal-description">
               {confirmation === "reset"
                 ? tr(
-                    "Все расходы и настройки будут удалены из этого браузера. Перед удалением можно скачать резервную копию.",
+                    "Все расходы, список покупок и настройки будут удалены из этого браузера. Перед удалением можно скачать резервную копию.",
                   )
                 : tr(
-                    "Демо заменит текущие расходы и настройки. Скачайте копию, чтобы вернуться к своим данным.",
+                    "Демо заменит текущие расходы, список покупок и настройки. Скачайте копию, чтобы вернуться к своим данным.",
                   )}
             </p>
             <div className="confirmation-backup">

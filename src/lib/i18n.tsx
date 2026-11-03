@@ -3,6 +3,29 @@ import type { ReactNode } from "react";
 import type { Language } from "./finance";
 
 const english: Readonly<Record<string, string>> = {
+  "Список покупок": "Shopping list",
+  "Трекер": "Tracker",
+  "Профиль": "Profile",
+  "СНАЧАЛА СПИСОК. ПОТОМ ПОКУПКА.": "PLAN FIRST. SHOP NEXT.",
+  "Запланируйте продукты, а после покупки укажите цену — всё сохранится автоматически.":
+    "Plan your groceries, then enter the price after buying — everything saves automatically.",
+  "PDF со всеми записями, списком покупок, аватаром и настройками. Подходит для восстановления.":
+    "A PDF with all entries, your shopping list, avatar and settings. Ready to restore.",
+  "Удаляет профиль, расходы и список покупок из этого браузера.":
+    "Removes your profile, expenses and shopping list from this browser.",
+  "Восстановить всё заменит текущие расходы, список покупок, профиль и настройки.":
+    "Restore everything replaces your current expenses, shopping list, profile and settings.",
+  "Все расходы, список покупок и настройки будут удалены из этого браузера. Перед удалением можно скачать резервную копию.":
+    "All expenses, your shopping list and settings will be removed from this browser. You can download a backup first.",
+  "Демо заменит текущие расходы, список покупок и настройки. Скачайте копию, чтобы вернуться к своим данным.":
+    "The demo replaces your current expenses, shopping list and settings. Download a backup to return to your data.",
+  "В списке покупок может быть не больше 1000 товаров.": "The shopping list can contain up to 1,000 products.",
+  "Выберите валюту USD, EUR или KZT.": "Choose USD, EUR or KZT.",
+  "Цена не может быть меньше суммы покупок внутри расхода.": "The price cannot be lower than the expense’s item total.",
+  "Достигнут предел в 50 000 расходов.": "The limit of 50,000 expenses has been reached.",
+  "Товар не найден в списке покупок.": "This product is no longer in the shopping list.",
+  "Введите положительную цену до 1 000 000 000 000 с точностью до двух знаков.":
+    "Enter a positive price up to 1,000,000,000,000 with up to two decimal places.",
   "Редактировать аватар": "Edit avatar",
   "Редактор аватара": "Avatar editor",
   "Переместите и увеличьте фото перед сохранением. PNG, JPG или WebP до 8 МБ.":

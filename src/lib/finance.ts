@@ -30,6 +30,15 @@ export interface Transaction {
   createdAt?: string;
 }
 
+/** A planned product becomes a real expense only after its price is entered. */
+export interface ShoppingItem {
+  id: string;
+  title: string;
+  currency: Currency;
+  createdAt: string;
+  transactionId?: string;
+}
+
 export interface Profile {
   name: string;
   email: string;
@@ -46,6 +55,8 @@ export interface AppData {
   version: 1;
   profile: Profile;
   transactions: Transaction[];
+  /** Optional so existing version-one backups retain their original shape. */
+  shoppingList?: ShoppingItem[];
 }
 
 export const STORAGE_KEY = 'finance-control:data:v1';
@@ -97,6 +108,7 @@ const MAX_TRANSACTIONS = 50_000;
 const MAX_BACKUP_LENGTH = 30_000_000;
 const MAX_ITEMS = 200;
 const MAX_AVATAR_LENGTH = 500_000;
+const MAX_SHOPPING_ITEMS = 1_000;
 
 type StorageAdapter = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -307,6 +319,41 @@ export function validateBackup(input: unknown): AppData {
     return transaction;
   });
 
+  let shoppingList: ShoppingItem[] | undefined;
+  if (Object.prototype.hasOwnProperty.call(data, 'shoppingList')) {
+    if (!Array.isArray(data.shoppingList) || data.shoppingList.length > MAX_SHOPPING_ITEMS) {
+      throw new Error('В списке покупок может быть не больше 1000 товаров.');
+    }
+    const shoppingIds = new Set<string>();
+    const linkedTransactions = new Set<string>();
+    shoppingList = data.shoppingList.map((item: unknown): ShoppingItem => {
+      if (!isRecord(item) || !isCurrency(item.currency) || !isValidDate(item.createdAt)) {
+        throw new Error('Один из товаров содержит некорректную валюту или дату создания.');
+      }
+      const id = readText(item.id, 'ID товара', 128);
+      if (shoppingIds.has(id)) throw new Error('В списке покупок найдены повторяющиеся ID товаров.');
+      shoppingIds.add(id);
+      const shoppingItem: ShoppingItem = {
+        id,
+        title: readText(item.title, 'Название товара', 160),
+        currency: item.currency,
+        createdAt: item.createdAt,
+      };
+      if (item.transactionId !== undefined) {
+        const transactionId = readText(item.transactionId, 'ID связанного расхода', 128);
+        // An expense can be deleted independently; the product then becomes pending.
+        if (ids.has(transactionId)) {
+          if (linkedTransactions.has(transactionId)) {
+            throw new Error('Один расход не может быть связан с несколькими товарами.');
+          }
+          linkedTransactions.add(transactionId);
+          shoppingItem.transactionId = transactionId;
+        }
+      }
+      return shoppingItem;
+    });
+  }
+
   return {
     version: 1,
     profile: {
@@ -319,6 +366,7 @@ export function validateBackup(input: unknown): AppData {
       ...(profile.avatar !== undefined ? { avatar: profile.avatar as string } : {}),
     },
     transactions,
+    ...(shoppingList !== undefined ? { shoppingList } : {}),
   };
 }
 

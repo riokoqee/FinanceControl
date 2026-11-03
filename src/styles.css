@@ -123,6 +123,7 @@ input[type='number'] { appearance: textfield; -moz-appearance: textfield; }
 .brand-name small { display: block; margin-top: 5px; color: var(--muted); font-size: 8px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
 .sidebar-label { margin: 52px 13px 13px; font-size: 9px; font-weight: 650; letter-spacing: 1.6px; color: var(--muted); text-transform: uppercase; }
 .nav-list { display: flex; flex-direction: column; gap: 7px; }
+.nav-label-short { display: none; }
 .nav-item {
   display: flex;
   align-items: center;
@@ -677,8 +678,10 @@ html[data-theme='dark'] .sidebar-tip { background: #1c2f3d; border-color: #32455
   :root { --sidebar-width: 0px; }
   .sidebar { z-index: 50; inset: auto 12px 12px; width: auto; height: 66px; flex-direction: row; justify-content: center; padding: 5px 12px; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 5px 30px #222b2310; }
   .brand { display: none; }
-  .nav-list { flex-direction: row; justify-content: space-around; gap: 8px; margin: 0; }
-  .nav-item { flex-direction: column; gap: 5px; width: 31%; height: 54px; min-height: 54px; padding: 7px 10px; font-size: 9px; border-radius: 9px; }
+  .nav-list { flex-direction: row; justify-content: space-around; width: 100%; gap: 4px; margin: 0; }
+  .nav-item { flex: 1; min-width: 0; flex-direction: column; gap: 5px; width: auto; height: 54px; min-height: 54px; padding: 7px 4px; font-size: 9px; border-radius: 9px; }
+  .nav-label-full { display: none; }
+  .nav-label-short { display: inline; }
   .nav-item > span:not(.nav-icon):not(.nav-count), .nav-item .nav-label { display: inline; }
   .nav-item > .nav-count { display: none; }
   .nav-item > svg, .nav-icon svg { width: 17px; height: 17px; }
