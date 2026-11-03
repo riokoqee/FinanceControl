@@ -34,6 +34,10 @@ jobs:
         run: npm run build
         env:
           GITHUB_PAGES: 'true'
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium
+      - name: Verify browser regressions and accessibility
+        run: npm run test:browser
       - name: Upload the built site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:

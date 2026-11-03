@@ -3,6 +3,23 @@ import type { ReactNode } from "react";
 import type { Language } from "./finance";
 
 const english: Readonly<Record<string, string>> = {
+  "Загрузить актуальный профиль": "Load current profile",
+  "После смены валюты бюджет превышает допустимый максимум. Сначала уменьшите бюджет.": "The converted budget exceeds the limit. Reduce your budget before changing currency.",
+  "Обнаружены повреждённые данные. Исходная копия сохранена.": "Damaged data detected. The original copy is preserved.",
+  "Автосохранение приостановлено. Восстановите копию или начните заново.": "Autosave is paused. Restore a backup or start again.",
+  "Изменение не применено. Проверьте свободное место и доступ к хранилищу.": "The change was not applied. Check available space and browser storage access.",
+  "Восстановить последнюю копию": "Restore last good copy",
+  "Восстановить последнюю копию?": "Restore the last good copy?",
+  "Повреждённые данные будут сохранены отдельно. Рабочая копия снова станет доступна для изменений.": "The damaged data will be archived separately. Your working copy will be editable again.",
+  "Восстановить копию": "Restore backup",
+  "Загрузить актуальную запись": "Load current entry",
+  "Изменения не сохранены. Проверьте актуальные данные и попробуйте ещё раз.": "Changes were not saved. Check the current data and try again.",
+  "Покупка изменена в другой вкладке. Отмените редактирование и откройте её заново.": "This item changed in another tab. Cancel editing and open it again.",
+  "Сохранённые данные повреждены. Исходная копия сохранена. Восстановите резервную копию или подтвердите сброс.": "Saved data is damaged. The original copy is preserved. Restore a backup or confirm a reset.",
+  "Данные изменились в другой вкладке. Обновите запись и повторите изменение.": "Data changed in another tab. Load the current entry and try again.",
+  "Хранилище браузера недоступно.": "Browser storage is unavailable.",
+  "Введите положительную сумму с точностью до двух знаков.": "Enter a positive amount with up to two decimal places.",
+
   "Список покупок": "Shopping list",
   "Трекер": "Tracker",
   "Профиль": "Profile",

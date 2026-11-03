@@ -103,14 +103,24 @@ export const DEFAULT_PROFILE: Readonly<Profile> = {
   language: 'ru',
 };
 
-const MAX_AMOUNT = 1_000_000_000_000;
-const MAX_TRANSACTIONS = 50_000;
+export const MAX_AMOUNT = 1_000_000_000_000;
+export const MAX_TRANSACTIONS = 50_000;
 const MAX_BACKUP_LENGTH = 30_000_000;
 const MAX_ITEMS = 200;
 const MAX_AVATAR_LENGTH = 500_000;
 const MAX_SHOPPING_ITEMS = 1_000;
 
 type StorageAdapter = Pick<Storage, 'getItem' | 'setItem'>;
+
+/** Parse entered money without accepting exponents, hexadecimal or silent rounding. */
+export function parseMoney(input: string, allowZero = false): number | null {
+  const text = input.trim();
+  if (!/^(?:\d+|\d{1,3}(?:[ \u00a0\u202f]\d{3})+)(?:[.,]\d{1,2})?$/.test(text)) return null;
+  const [whole, fraction = ''] = text.replace(/[ \u00a0\u202f]/g, '').replace(',', '.').split('.');
+  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  if (!Number.isSafeInteger(cents) || cents < (allowZero ? 0 : 1) || cents > MAX_AMOUNT * 100) return null;
+  return cents / 100;
+}
 
 export function createEmptyData(): AppData {
   return { version: 1, profile: { ...DEFAULT_PROFILE }, transactions: [] };
@@ -319,6 +329,7 @@ export function validateBackup(input: unknown): AppData {
     return transaction;
   });
 
+  const transactionsById = new Map(transactions.map((transaction) => [transaction.id, transaction]));
   let shoppingList: ShoppingItem[] | undefined;
   if (Object.prototype.hasOwnProperty.call(data, 'shoppingList')) {
     if (!Array.isArray(data.shoppingList) || data.shoppingList.length > MAX_SHOPPING_ITEMS) {
@@ -348,6 +359,10 @@ export function validateBackup(input: unknown): AppData {
           }
           linkedTransactions.add(transactionId);
           shoppingItem.transactionId = transactionId;
+          // Linked rows are a view of the surviving expense, including after a merge.
+          const linked = transactionsById.get(transactionId)!;
+          shoppingItem.title = linked.title;
+          shoppingItem.currency = linked.currency;
         }
       }
       return shoppingItem;
@@ -375,7 +390,13 @@ export function loadData(storage?: StorageAdapter): AppData {
   try {
     const source = storage ?? globalThis.localStorage;
     const saved = source?.getItem(STORAGE_KEY);
-    return saved ? validateBackup(saved) : createEmptyData();
+    if (saved === null || saved === undefined) return createEmptyData();
+    try {
+      return validateBackup(saved);
+    } catch {
+      const lastGood = source?.getItem(`${STORAGE_KEY}:last-good`);
+      return lastGood ? validateBackup(lastGood) : createEmptyData();
+    }
   } catch {
     return createEmptyData();
   }
@@ -384,9 +405,14 @@ export function loadData(storage?: StorageAdapter): AppData {
 /** Return false for full or restricted storage so the UI can explain the issue. */
 export function saveData(data: AppData, storage?: StorageAdapter): boolean {
   try {
+    const serialized = JSON.stringify(validateBackup(data));
     const destination = storage ?? globalThis.localStorage;
     if (!destination) return false;
-    destination.setItem(STORAGE_KEY, JSON.stringify(validateBackup(data)));
+    const saved = destination.getItem(STORAGE_KEY);
+    // This compatibility API cannot authorize recovery or discard damaged data.
+    if (saved !== null) validateBackup(saved);
+    destination.setItem(STORAGE_KEY, serialized);
+    try { destination.setItem(`${STORAGE_KEY}:last-good`, serialized); } catch { /* Primary saved. */ }
     return true;
   } catch {
     return false;

@@ -119,6 +119,47 @@ describe('planned products and recorded expenses', () => {
     expect(updateShoppingItem(plannedData(), 'bread', { currency: 'KZT' }).transactions).toEqual([]);
   });
 
+  it('preserves the live expense currency when only a stale imported product title is edited', () => {
+    const before = purchasedData();
+    before.shoppingList![0].currency = 'USD';
+    before.transactions[0] = { ...before.transactions[0], title: 'Live expense', currency: 'EUR' };
+    const updated = updateShoppingItem(before, 'bread', { title: 'New product name' });
+    expect(updated.transactions).toEqual([{ ...before.transactions[0], title: 'New product name' }]);
+    expect(updated.shoppingList![0]).toEqual({ ...before.shoppingList![0], title: 'New product name', currency: 'EUR' });
+    expect(before.shoppingList![0].currency).toBe('USD');
+  });
+
+  it('preserves a live expense title and ID on a price-only save from a stale shopping row', () => {
+    const before = purchasedData();
+    before.transactions[0] = { ...before.transactions[0], title: 'Renamed in the journal', note: 'Keep this note' };
+    const updated = saveShoppingPrice(before, 'bread', 20, 'EUR', 'must-not-create', new Date());
+    expect(updated.transactions).toEqual([{ ...before.transactions[0], amount: 20 }]);
+    expect(updated.shoppingList![0]).toEqual({ ...before.shoppingList![0], title: 'Renamed in the journal' });
+  });
+
+  it('normalizes linked rows to the live expense and applies only explicit fields', () => {
+    const before = purchasedData();
+    before.shoppingList![0] = { ...before.shoppingList![0], title: 'Old title', currency: 'USD' };
+    before.transactions[0].title = 'Current title';
+    const unchanged = updateShoppingItem(before, 'bread', {});
+    expect(unchanged.transactions).toEqual(before.transactions);
+    expect(unchanged.shoppingList![0]).toEqual({ ...before.shoppingList![0], title: 'Current title', currency: 'EUR' });
+    const currencyOnly = updateShoppingItem(before, 'bread', { currency: 'KZT' });
+    expect(currencyOnly.transactions[0]).toEqual({ ...before.transactions[0], currency: 'KZT' });
+    expect(currencyOnly.shoppingList![0].title).toBe('Current title');
+    const relinked = addShoppingItem({ ...before, shoppingList: [] }, before.shoppingList![0]);
+    expect(relinked.shoppingList).toEqual(unchanged.shoppingList);
+  });
+
+  it('keeps title-only and currency-only edits compatible with pending legacy rows', () => {
+    const before = plannedData();
+    const renamed = updateShoppingItem(before, 'bread', { title: 'Bread' });
+    expect(renamed.shoppingList).toEqual([plannedItem({ title: 'Bread' })]);
+    const recurrency = updateShoppingItem(renamed, 'bread', { currency: 'USD' });
+    expect(recurrency.shoppingList).toEqual([plannedItem({ title: 'Bread', currency: 'USD' })]);
+    expect(recurrency.transactions).toEqual([]);
+  });
+
   it('removes pending or paid rows while keeping every recorded expense', () => {
     expect(removeShoppingItem(plannedData(), 'bread').shoppingList).toEqual([]);
     const before = purchasedData();

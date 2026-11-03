@@ -12,8 +12,8 @@ interface ShoppingListProps {
   defaultCurrency: Currency;
   language: Language;
   onAdd: (title: string, currency: Currency) => boolean;
-  onPriceChange: (id: string, amount: number, currency: Currency) => boolean;
-  onUpdate: (id: string, patch: { title?: string; currency?: Currency }) => boolean;
+  onPriceChange: (id: string, amount: number, currency: Currency, base?: Transaction | null, changed?: { amount?: number; currency?: Currency }) => boolean;
+  onUpdate: (id: string, patch: { title?: string; currency?: Currency }, base?: Transaction | null) => boolean;
   onRemove: (id: string) => boolean;
 }
 
@@ -44,6 +44,10 @@ const copy = {
     pricePlaceholder: "Цена",
     priceError: "Введите цену от 0,01 до 1 000 000 000 000, не больше двух знаков после запятой.",
     saveError: "Не удалось сохранить. Измените значение или выйдите из поля, чтобы повторить.",
+    conflict: "Эта покупка изменена в другой вкладке. Загрузите актуальные значения или подтвердите сохранение своих изменений.",
+    deletedConflict: "Связанный расход удалён в другой вкладке. Загрузите актуальные значения или подтвердите создание расхода со своей ценой.",
+    loadCurrent: "Загрузить актуальные",
+    keepDraft: "Сохранить мои изменения",
     remove: "Удалить из списка",
     title: "Название продукта",
     list: "Продукты в списке покупок",
@@ -74,6 +78,10 @@ const copy = {
     pricePlaceholder: "Price",
     priceError: "Enter a price from 0.01 to 1,000,000,000,000, with up to two decimal places.",
     saveError: "Unable to save. Edit the value or leave the field to try again.",
+    conflict: "This purchase changed in another tab. Load the current values or confirm saving your changes.",
+    deletedConflict: "The linked expense was deleted in another tab. Load the current values or confirm creating an expense with your price.",
+    loadCurrent: "Load current values",
+    keepDraft: "Keep my changes",
     remove: "Remove from list",
     title: "Product name",
     list: "Shopping list products",
@@ -232,58 +240,95 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
 }) {
   const text = copy[language];
   const id = useId();
+  const initialTitle = transaction?.title ?? item.title;
   const initialCurrency = transaction?.currency ?? item.currency;
-  const [title, setTitle] = useState(item.title);
+  const [title, setTitle] = useState(initialTitle);
   const [price, setPrice] = useState(transaction ? String(transaction.amount) : "");
   const [currency, setCurrency] = useState(initialCurrency);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [priceError, setPriceError] = useState<"invalid" | "save" | null>(null);
   const [titleError, setTitleError] = useState<"invalid" | "save" | null>(null);
+  const [conflict, setConflict] = useState(false);
+  const conflictRef = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const discarded = useRef(false);
-  const focused = useRef({ price: false, title: false });
+  const focused = useRef({ price: false, title: false, currency: false });
   const latest = useRef({ item, transaction, onPriceChange, onUpdate });
   latest.current = { item, transaction, onPriceChange, onUpdate };
-  const draft = useRef({ title: item.title, price: transaction ? String(transaction.amount) : "", currency: initialCurrency, priceDirty: false, currencyDirty: false, titleDirty: false });
-  const saved = useRef({ title: item.title, amount: transaction?.amount ?? null, currency: initialCurrency });
-
-  // A prop refresh must never erase an unfinished or invalid draft.
-  useEffect(() => {
-    const current = draft.current;
-    if (!current.titleDirty && !focused.current.title) {
-      current.title = item.title;
-      saved.current.title = item.title;
-      setTitle(item.title);
-    }
-    if (!current.priceDirty && !current.currencyDirty && !focused.current.price) {
-      current.price = transaction ? String(transaction.amount) : "";
-      current.currency = transaction?.currency ?? item.currency;
-      saved.current.amount = transaction?.amount ?? null;
-      saved.current.currency = current.currency;
-      setPrice(current.price);
-      setCurrency(current.currency);
-    }
-  }, [item.title, item.currency, transaction?.id, transaction?.amount, transaction?.currency]);
+  const draft = useRef({ title: initialTitle, price: transaction ? String(transaction.amount) : "", currency: initialCurrency, priceDirty: false, currencyDirty: false, titleDirty: false });
+  const saved = useRef({ title: initialTitle, amount: transaction?.amount ?? null, currency: initialCurrency });
+  // Each field keeps the expense it was read from until its draft is saved or discarded.
+  const baseline = useRef({ title: transaction ?? null, price: transaction ?? null, currency: transaction ?? null });
 
   function cancelTimer() {
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = null;
   }
 
-  function saveTitle() {
-    if (discarded.current || !draft.current.titleDirty) return;
-    const next = draft.current.title.trim();
-    if (!next) { setTitleError("invalid"); return; }
-    if (next === saved.current.title) {
-      draft.current.titleDirty = false;
-      setTitleError(null);
-      return;
-    }
+  function hasExternalConflict() {
     const current = latest.current;
-    if (current.onUpdate(current.item.id, { title: next })) {
+    const value = draft.current;
+    const source = current.transaction;
+    const changedIdentity = (base: Transaction | null) => (base?.id ?? null) !== (source?.id ?? null);
+    return (value.titleDirty && (changedIdentity(baseline.current.title) ||
+      ((source?.title ?? current.item.title) !== saved.current.title && value.title.trim() !== (source?.title ?? current.item.title)))) ||
+      (value.priceDirty && (changedIdentity(baseline.current.price) ||
+        ((source?.amount ?? null) !== saved.current.amount && parseShoppingPrice(value.price) !== (source?.amount ?? null)))) ||
+      (value.currencyDirty && (changedIdentity(baseline.current.currency) ||
+        ((source?.currency ?? current.item.currency) !== saved.current.currency && value.currency !== (source?.currency ?? current.item.currency))));
+  }
+
+  function blockConflict() {
+    if (!conflictRef.current && !hasExternalConflict()) return false;
+    cancelTimer();
+    conflictRef.current = true;
+    setConflict(true);
+    setStatus("idle");
+    return true;
+  }
+
+  function syncUntouched() {
+    const current = latest.current;
+    const value = draft.current;
+    if (!value.titleDirty && !focused.current.title) {
+      value.title = current.transaction?.title ?? current.item.title;
+      saved.current.title = value.title;
+      baseline.current.title = current.transaction ?? null;
+      setTitle(value.title);
+    }
+    if (!value.priceDirty && !focused.current.price) {
+      value.price = current.transaction ? String(current.transaction.amount) : "";
+      saved.current.amount = current.transaction?.amount ?? null;
+      baseline.current.price = current.transaction ?? null;
+      setPrice(value.price);
+    }
+    if (!value.currencyDirty && !focused.current.currency) {
+      value.currency = current.transaction?.currency ?? current.item.currency;
+      saved.current.currency = value.currency;
+      baseline.current.currency = current.transaction ?? null;
+      setCurrency(value.currency);
+    }
+  }
+
+  // Preserve unfinished drafts; a focused, untouched field catches up as soon as it blurs.
+  useEffect(() => {
+    blockConflict();
+    syncUntouched();
+  }, [item.title, item.currency, transaction?.id, transaction?.title, transaction?.amount, transaction?.currency]);
+
+  function saveTitle() {
+    syncUntouched();
+    if (discarded.current || !draft.current.titleDirty || blockConflict()) return;
+    const next = draft.current.title.trim();
+    if (!next) { setTitleError("invalid"); setStatus("idle"); return; }
+    const current = latest.current;
+    const source = baseline.current.title;
+    const base = source ? { ...source, title: saved.current.title } : null;
+    if (current.onUpdate(current.item.id, { title: next }, base)) {
       saved.current.title = next;
       draft.current.title = next;
       draft.current.titleDirty = false;
+      baseline.current.title = current.transaction ? { ...current.transaction, title: next } : null;
       setTitle(next);
       setTitleError(null);
       setStatus("saved");
@@ -295,44 +340,70 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
 
   function savePrice() {
     cancelTimer();
-    if (discarded.current) return;
-    const current = draft.current;
-    if (!current.priceDirty && !current.currencyDirty) return;
-    const amount = parseShoppingPrice(current.price);
+    syncUntouched();
+    if (discarded.current || blockConflict()) return;
+    const value = draft.current;
+    if (!value.priceDirty && !value.currencyDirty) return;
+    const amount = parseShoppingPrice(value.price);
     const callbacks = latest.current;
-    if (amount === null) {
-      // A planned product can keep an empty price while its currency is saved.
-      setPriceError(current.price.trim() || callbacks.transaction ? "invalid" : null);
-      if (current.currencyDirty) {
-        if (callbacks.onUpdate(callbacks.item.id, { currency: current.currency })) {
-          saved.current.currency = current.currency;
-          current.currencyDirty = false;
-          setStatus("saved");
-        } else {
-          setPriceError("save");
-          setStatus("failed");
-        }
-      } else setStatus("idle");
+    const invalid = amount === null && Boolean(value.price.trim() || callbacks.transaction);
+    setPriceError(invalid ? "invalid" : null);
+    const source = value.priceDirty ? baseline.current.price : baseline.current.currency;
+    const base = source ? { ...source, amount: saved.current.amount ?? source.amount, currency: saved.current.currency } : null;
+    if (amount === null || !value.priceDirty) {
+      // Currency changes patch only currency, including while an invalid price is unfinished.
+      if (!value.currencyDirty) { setStatus("idle"); return; }
+      if (callbacks.onUpdate(callbacks.item.id, { currency: value.currency }, base)) {
+        saved.current.currency = value.currency;
+        baseline.current.currency = callbacks.transaction ? { ...callbacks.transaction, currency: value.currency } : null;
+        value.currencyDirty = false;
+        setStatus(invalid ? "idle" : "saved");
+      } else {
+        setPriceError("save");
+        setStatus("failed");
+      }
       return;
     }
-    if (amount === saved.current.amount && current.currency === saved.current.currency) {
-      current.priceDirty = false;
-      current.currencyDirty = false;
-      setPriceError(null);
-      setStatus("saved");
-      return;
-    }
-    if (callbacks.onPriceChange(callbacks.item.id, amount, current.currency)) {
+    const changed = {
+      amount,
+      ...(value.currencyDirty ? { currency: value.currency } : {}),
+    };
+    if (callbacks.onPriceChange(callbacks.item.id, amount, value.currency, base, changed)) {
       saved.current.amount = amount;
-      saved.current.currency = current.currency;
-      current.priceDirty = false;
-      current.currencyDirty = false;
+      saved.current.currency = value.currency;
+      baseline.current.price = callbacks.transaction ? { ...callbacks.transaction, amount, currency: value.currency } : null;
+      baseline.current.currency = baseline.current.price;
+      value.priceDirty = false;
+      value.currencyDirty = false;
       setPriceError(null);
       setStatus("saved");
     } else {
       setPriceError("save");
       setStatus("failed");
     }
+  }
+
+  function resolveConflict(keepDraft: boolean) {
+    cancelTimer();
+    const current = latest.current;
+    const value = draft.current;
+    const liveTitle = current.transaction?.title ?? current.item.title;
+    const liveAmount = current.transaction?.amount ?? null;
+    const liveCurrency = current.transaction?.currency ?? current.item.currency;
+    saved.current = { title: liveTitle, amount: liveAmount, currency: liveCurrency };
+    baseline.current = { title: current.transaction ?? null, price: current.transaction ?? null, currency: current.transaction ?? null };
+    if (!keepDraft || !value.titleDirty) { value.title = liveTitle; value.titleDirty = false; }
+    if (!keepDraft || !value.priceDirty) { value.price = liveAmount === null ? "" : String(liveAmount); value.priceDirty = false; }
+    if (!keepDraft || !value.currencyDirty) { value.currency = liveCurrency; value.currencyDirty = false; }
+    setTitle(value.title);
+    setPrice(value.price);
+    setCurrency(value.currency);
+    setTitleError(null);
+    setPriceError(null);
+    setStatus("idle");
+    conflictRef.current = false;
+    setConflict(false);
+    if (keepDraft) { saveTitle(); savePrice(); }
   }
 
   const flush = useRef(() => {});
@@ -351,17 +422,19 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
     const amount = parseShoppingPrice(current.price);
     const invalid = amount === null && Boolean(current.price.trim() || latest.current.transaction);
     setPriceError(invalid ? "invalid" : null);
-    if (amount !== null || current.currencyDirty) {
+    if (blockConflict()) return;
+    if ((amount !== null && current.priceDirty) || current.currencyDirty) {
       setStatus("saving");
       timer.current = setTimeout(() => { savePrice(); }, SAVE_DELAY);
     } else setStatus("idle");
   }
 
   function isRowControl(target: EventTarget | null) {
-    return target instanceof HTMLElement && Boolean(target.closest(".shopping-currency, .shopping-remove"));
+    return target instanceof HTMLElement && Boolean(target.closest(".shopping-currency, .shopping-remove, .shopping-conflict-actions"));
   }
 
-  const stateText = status === "saving" ? text.saving : status === "saved" ? text.saved : "";
+  const hasUnsavedDraft = draft.current.titleDirty || draft.current.priceDirty || draft.current.currencyDirty;
+  const stateText = status === "saving" ? text.saving : status === "saved" && !hasUnsavedDraft ? text.saved : "";
   return (
     <li className={`shopping-item${transaction ? " shopping-item-purchased" : ""}`} data-shopping-item={item.id}>
       <span className="shopping-item-marker" aria-hidden="true">{transaction ? <Check size={15} /> : <span />}</span>
@@ -369,20 +442,22 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
         <input
           className="shopping-title-input"
           aria-label={`${text.title}: ${item.title}`}
-          aria-invalid={Boolean(titleError) || undefined}
-          aria-describedby={titleError ? `${id}-title-error` : undefined}
+          aria-invalid={Boolean(titleError || conflict) || undefined}
+          aria-describedby={conflict ? `${id}-conflict` : titleError ? `${id}-title-error` : undefined}
           value={title}
           maxLength={160}
           onFocus={() => { focused.current.title = true; }}
           onChange={(event) => {
             draft.current.title = event.target.value;
-            draft.current.titleDirty = true;
+            draft.current.titleDirty = event.target.value.trim() !== saved.current.title;
             setTitle(event.target.value);
             setTitleError(null);
+            setStatus("idle");
           }}
           onBlur={(event) => {
             focused.current.title = false;
-            if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".shopping-remove"))) saveTitle();
+            syncUntouched();
+            if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".shopping-remove, .shopping-conflict-actions"))) saveTitle();
           }}
           onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveTitle(); } }}
         />
@@ -399,16 +474,16 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
           autoComplete="off"
           placeholder={text.pricePlaceholder}
           value={price}
-          aria-invalid={Boolean(priceError) || undefined}
-          aria-describedby={priceError ? `${id}-price-error` : `${id}-save-status`}
+          aria-invalid={Boolean(priceError || conflict) || undefined}
+          aria-describedby={conflict ? `${id}-conflict` : priceError ? `${id}-price-error` : `${id}-save-status`}
           onFocus={() => { focused.current.price = true; }}
           onChange={(event) => {
             draft.current.price = event.target.value;
-            draft.current.priceDirty = true;
+            draft.current.priceDirty = parseShoppingPrice(event.target.value) !== saved.current.amount || Boolean(event.target.value.trim() && parseShoppingPrice(event.target.value) === null);
             setPrice(event.target.value);
             queuePriceSave();
           }}
-          onBlur={(event) => { focused.current.price = false; if (!isRowControl(event.relatedTarget)) savePrice(); }}
+          onBlur={(event) => { focused.current.price = false; syncUntouched(); if (!isRowControl(event.relatedTarget)) savePrice(); }}
           onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); savePrice(); } }}
         />
         <label className="shopping-sr-only" htmlFor={`${id}-currency`}>{text.currency}: {item.title}</label>
@@ -416,16 +491,17 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
           id={`${id}-currency`}
           className="form-input shopping-currency"
           value={currency}
+          onFocus={() => { focused.current.currency = true; }}
           onChange={(event) => {
             const next = event.target.value as Currency;
             draft.current.currency = next;
-            draft.current.currencyDirty = true;
+            draft.current.currencyDirty = next !== saved.current.currency;
             setCurrency(next);
             queuePriceSave();
           }}
-          onBlur={(event) => { if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".shopping-remove"))) savePrice(); }}
+          onBlur={(event) => { focused.current.currency = false; syncUntouched(); if (!isRowControl(event.relatedTarget)) savePrice(); }}
         >{CURRENCIES.map(({ code }) => <option key={code} value={code}>{code}</option>)}</select>
-        <span className="shopping-save-status" id={`${id}-save-status`} role="status" aria-live="polite">{!priceError && stateText}</span>
+        <span className="shopping-save-status" id={`${id}-save-status`} role="status" aria-live="polite">{!priceError && !titleError && !conflict && stateText}</span>
       </div>
       <button
         className="shopping-remove"
@@ -437,6 +513,13 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
           if (!onRemove(item.id)) discarded.current = false;
         }}
       ><Trash2 size={17} aria-hidden="true" /></button>
+      {conflict && <div className="shopping-row-error shopping-conflict" id={`${id}-conflict`} role="alert">
+        <span>{!transaction && (baseline.current.price || baseline.current.title || baseline.current.currency) ? text.deletedConflict : text.conflict}</span>
+        <div className="shopping-conflict-actions">
+          <button className="button button-secondary" type="button" onClick={() => resolveConflict(false)}>{text.loadCurrent}</button>
+          <button className="button button-secondary" type="button" onClick={() => resolveConflict(true)}>{text.keepDraft}</button>
+        </div>
+      </div>}
       {priceError && <p className="shopping-row-error shopping-price-error" id={`${id}-price-error`} role="alert">{priceError === "invalid" ? text.priceError : text.saveError}</p>}
     </li>
   );

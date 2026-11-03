@@ -29,7 +29,8 @@
 .streak-bounty-title { display: flex; align-items: center; gap: 12px; margin: 0 0 9px; color: var(--ink); font-size: clamp(22px, 2.3vw, 30px); font-weight: 650; line-height: 1.25; letter-spacing: -.9px; }
 .streak-bounty-title-spark { color: var(--gold); font-size: 22px; font-weight: 400; }
 .streak-bounty-description { max-width: 490px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
-.streak-bounty-status { display: flex; align-items: center; gap: 7px; width: fit-content; margin-top: 15px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--accent-strong); background: var(--accent-soft); font-size: 13px; font-weight: 600; line-height: 1.6; }
+.streak-bounty-status { display: flex; align-items: center; gap: 7px; width: fit-content; max-width: 100%; margin-top: 15px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--accent-strong); background: var(--accent-soft); font-size: 13px; font-weight: 600; line-height: 1.6; }
+.streak-bounty-status > span { min-width: 0; overflow-wrap: anywhere; }
 .streak-bounty-status--done { border-color: transparent; color: var(--green); background: var(--green-soft); }
 .streak-bounty-first-day { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 14px; color: var(--muted); font-size: 11px; line-height: 1.7; }
 .streak-bounty-first-day > span { display: flex; align-items: center; gap: 6px; color: var(--subtle); font-weight: 650; }

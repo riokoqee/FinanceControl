@@ -65,6 +65,19 @@ describe('finance data and backups', () => {
     expect(() => validateBackup(null)).toThrow();
   });
 
+  it('normalizes stale linked shopping metadata to its surviving transaction', () => {
+    const data = createDemoData();
+    const linked = data.transactions[0];
+    data.shoppingList = [{
+      id: 'planned', title: 'Old import title', currency: 'KZT', createdAt: linked.date, transactionId: linked.id,
+    }];
+    expect(validateBackup(data).shoppingList![0]).toMatchObject({
+      title: linked.title, currency: linked.currency, transactionId: linked.id,
+    });
+    // Validation never mutates the caller's recoverable/imported copy.
+    expect(data.shoppingList[0].title).toBe('Old import title');
+  });
+
   it('rejects invalid profile settings and accepts an unset budget', () => {
     const data = createEmptyData();
     expect(validateBackup(data).profile.monthlyBudget).toBe(0);
@@ -276,5 +289,33 @@ describe('local persistence', () => {
     invalid.profile.monthlyBudget = NaN;
     expect(saveData(invalid, storage)).toBe(false);
     expect(loadData(storage)).toEqual(valid);
+  });
+
+  it('keeps damaged primary data intact through the legacy boolean save API', () => {
+    const storage = memoryStorage();
+    const original = '{damaged-but-recoverable';
+    storage.setItem(STORAGE_KEY, original);
+    expect(saveData(createEmptyData(), storage)).toBe(false);
+    expect(storage.getItem(STORAGE_KEY)).toBe(original);
+  });
+
+  it('loads the last good snapshot without overwriting a damaged primary', () => {
+    const storage = memoryStorage();
+    const valid = createDemoData();
+    expect(saveData(valid, storage)).toBe(true);
+    storage.setItem(STORAGE_KEY, '{damaged');
+    expect(loadData(storage)).toEqual(valid);
+    expect(storage.getItem(STORAGE_KEY)).toBe('{damaged');
+    expect(saveData(createEmptyData(), storage)).toBe(false);
+  });
+
+  it('does not report a failed secondary snapshot as a failed primary save', () => {
+    const storage = memoryStorage();
+    const adapter = { getItem: storage.getItem, setItem: (key: string, value: string) => {
+      if (key.endsWith(':last-good')) throw new Error('QuotaExceededError');
+      storage.setItem(key, value);
+    } };
+    expect(saveData(createEmptyData(), adapter)).toBe(true);
+    expect(loadData(storage)).toEqual(createEmptyData());
   });
 });

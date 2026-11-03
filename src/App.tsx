@@ -40,17 +40,15 @@ import type { LucideIcon } from "lucide-react";
 import {
   CATEGORIES,
   CURRENCIES,
-  STORAGE_KEY,
+  MAX_AMOUNT,
+  MAX_TRANSACTIONS,
   RATE_LABEL,
   convertAmount,
   createDemoData,
   createEmptyData,
-  formatDate,
   formatMoney,
   getMonthTransactions,
   getItemTotal,
-  loadData,
-  saveData,
   todayString,
   validateBackup,
 } from "./lib/finance";
@@ -62,6 +60,10 @@ import type {
   Transaction,
 } from "./lib/finance";
 
+import { usePersistentData } from "./lib/usePersistentData";
+import { DataConflictError, mergeAppData, mergeTransactionDraft, parseMoney } from "./lib/storage";
+import TransactionTable from "./components/TransactionTable";
+import ExpenseChart from "./components/ExpenseChart";
 import ActivityCalendar from "./components/ActivityCalendar";
 import EntryDetails from "./components/EntryDetails";
 import AvatarCropper from "./components/AvatarCropper";
@@ -148,30 +150,21 @@ function Button({
     </button>
   );
 }
-function CategoryIcon({ category }: { category: CategoryId }) {
-  const Icon = categoryIcons[category];
-  return (
-    <span
-      className="transaction-icon"
-      style={{
-        color: categoryColors[category],
-        background: `${categoryColors[category]}19`,
-      }}
-    >
-      <Icon size={18} strokeWidth={1.8} />
-    </span>
-  );
-}
-
 export default function App() {
-  const [data, setData] = useState<AppData>(loadData);
+  const { data, commit, status: storageStatus, error: storageError, lastError } = usePersistentData();
+  const storageOk = !storageError && (storageStatus === "ready" || storageStatus === "empty");
+  const setData = (change: AppData | ((value: AppData) => AppData)) => {
+    const next = commit(change);
+    if (next) latest.current = { ...latest.current, data: next };
+    return next;
+  };
   const language = data.profile.language;
   const streak = useStreakStats(data.transactions);
   const tr = (text: string) => translate(language, text);
   const [page, setPage] = useState<Page>(readPage);
   const [month, setMonth] = useState(currentMonth);
   const [modal, setModal] = useState<"new" | Transaction | null>(null);
-  const [confirmation, setConfirmation] = useState<"reset" | "demo" | null>(
+  const [confirmation, setConfirmation] = useState<"reset" | "demo" | "recovery" | null>(
     null,
   );
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -184,7 +177,6 @@ export default function App() {
   const avatarRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [bountyCelebration, setBountyCelebration] = useState<(BountyCelebration & { page: Page }) | null>(null);
-  const [storageOk, setStorageOk] = useState(true);
   const [showDemoBanner, setShowDemoBanner] = useState(true);
   const [chartRange, setChartRange] = useState<"month" | "week">("month");
   const [search, setSearch] = useState("");
@@ -193,6 +185,7 @@ export default function App() {
   const [sort, setSort] = useState("newest");
   const [allTime, setAllTime] = useState(false);
   const [profile, setProfile] = useState<Profile>(data.profile);
+  const profileBase = useRef(data.profile);
   const importRef = useRef<HTMLInputElement>(null);
   const currency = data.profile.currency;
   const detailRecord = data.transactions.find((t) => t.id === detailId);
@@ -272,10 +265,10 @@ export default function App() {
     ],
   );
 
-  useLayoutEffect(() => {
-    const ok = saveData(data);
-    setStorageOk(ok);
-  }, [data]);
+  useEffect(() => {
+    if (storageError) setToast({ message: storageError, error: true });
+  }, [storageError]);
+
   useLayoutEffect(() => {
     if (
       page !== "profile" ||
@@ -292,62 +285,15 @@ export default function App() {
       name: profile.name.trim(),
       email: profile.email.trim(),
     };
-    setData((d) =>
-      JSON.stringify(d.profile) === JSON.stringify(nextProfile)
-        ? d
-        : { ...d, profile: nextProfile },
-    );
+    if (JSON.stringify(profileBase.current) === JSON.stringify(nextProfile)) return;
+    const saved = setData((d) => mergeAppData(
+      { ...d, profile: profileBase.current }, d, { ...d, profile: nextProfile },
+    ));
+    if (saved) {
+      profileBase.current = saved.profile;
+      setProfile(saved.profile);
+    }
   }, [profile, page]);
-  useEffect(() => {
-    const flush = () => {
-      const {
-        data: current,
-        profile: draft,
-        page: activePage,
-      } = latest.current;
-      const next =
-        activePage === "profile" &&
-        draft.name.trim() &&
-        Number.isFinite(draft.monthlyBudget) &&
-        draft.monthlyBudget >= 0 &&
-        draft.monthlyBudget <= 1e12
-          ? {
-              ...current,
-              profile: {
-                ...draft,
-                name: draft.name.trim(),
-                email: draft.email.trim(),
-              },
-            }
-          : current;
-      saveData(next);
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === "hidden") flush();
-    };
-    window.addEventListener("pagehide", flush);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.removeEventListener("pagehide", flush);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, []);
-  useEffect(() => {
-    const sync = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY || !event.newValue) return;
-      try {
-        const incoming = validateBackup(event.newValue);
-        setBountyCelebration(null);
-        setData(incoming);
-        setProfile(incoming.profile);
-        setToast({ message: "Изменения из другой вкладки синхронизированы" });
-      } catch {
-        // An invalid record from another tab must not replace usable data.
-      }
-    };
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
-  }, []);
   useEffect(() => {
     const handler = () => setPage(readPage());
     window.addEventListener("hashchange", handler);
@@ -388,7 +334,10 @@ export default function App() {
     }
   }, [streak.activeToday, streak.current, bountyCelebration]);
   useEffect(() => {
-    if (page !== "profile") setProfile(data.profile);
+    if (page !== "profile" || JSON.stringify(profile) === JSON.stringify(profileBase.current)) {
+      profileBase.current = data.profile;
+      setProfile(data.profile);
+    }
   }, [data.profile, page]);
   useEffect(() => {
     document.documentElement.lang = language;
@@ -396,7 +345,7 @@ export default function App() {
   function navigate(next: Page) {
     setPage(next);
     window.location.hash = next;
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }
   function shiftMonth(direction: number) {
     const next = new Date(`${month}-01T12:00:00`);
@@ -409,13 +358,16 @@ export default function App() {
       profile: {
         ...d.profile,
         currency: next,
-        monthlyBudget:
-          Math.round(
-            convertAmount(d.profile.monthlyBudget, d.profile.currency, next) *
-              100,
-          ) / 100,
+        monthlyBudget: convertedBudget(d.profile.monthlyBudget, d.profile.currency, next),
       },
     }));
+  }
+  function convertedBudget(amount: number, from: Currency, to: Currency) {
+    const converted = Math.round(convertAmount(amount, from, to) * 100) / 100;
+    if (!Number.isFinite(converted) || converted > MAX_AMOUNT) {
+      throw new Error("После смены валюты бюджет превышает допустимый максимум. Сначала уменьшите бюджет.");
+    }
+    return converted;
   }
   function saveTransaction(value: Transaction) {
     const editing = modal !== "new";
@@ -425,17 +377,16 @@ export default function App() {
       getStreakStats(currentTransactions, now),
       getStreakStats([value, ...currentTransactions], now),
     );
-    setData((d) => ({
-      ...d,
-      transactions: editing
-        ? d.transactions.map((t) => (t.id === value.id ? value : t))
-        : [value, ...d.transactions],
-      ...(editing && d.shoppingList ? {
-        shoppingList: d.shoppingList.map((item) => item.transactionId === value.id
-          ? { ...item, title: value.title, currency: value.currency }
-          : item),
-      } : {}),
-    }));
+    const saved = setData((d) => {
+      if (!editing && d.transactions.length >= MAX_TRANSACTIONS) throw new Error("В журнале может быть не больше 50 000 записей.");
+      const record = editing && modal
+        ? mergeTransactionDraft(modal, d.transactions.find((t) => t.id === value.id), value)
+        : value;
+      return { ...d, transactions: editing
+        ? d.transactions.map((t) => t.id === value.id ? record : t)
+        : [record, ...d.transactions] };
+    });
+    if (!saved) return lastError.current;
     setMonth(value.date.slice(0, 7));
     setModal(null);
     setBountyCelebration(increase ? {
@@ -452,39 +403,45 @@ export default function App() {
         : tr("Расход добавлен. Всё под контролем!"),
       pirate: increase?.promoted,
     });
+    return true;
   }
   function commitShoppingChange(change: (current: AppData) => AppData): AppData | null {
-    try {
-      const next = change(latest.current.data);
-      if (!saveData(next)) {
-        setStorageOk(false);
-        setToast({ message: "Не удалось сохранить изменения в браузере.", error: true });
-        return null;
-      }
-      // Several rows may flush together on navigation or when the tab closes.
-      // Keep each write based on the previous write, even before React renders.
-      latest.current = { ...latest.current, data: next };
-      setData(next);
-      setStorageOk(true);
-      return next;
-    } catch (error) {
-      setToast({ message: error instanceof Error ? error.message : "Не удалось сохранить изменения в браузере.", error: true });
-      return null;
-    }
+    return setData(change);
   }
   function addPlannedItem(title: string, itemCurrency: Currency): boolean {
     return Boolean(commitShoppingChange((current) => addShoppingItem(current, {
       id: createRecordId(), title, currency: itemCurrency, createdAt: todayString(),
     })));
   }
-  function updatePlannedItem(id: string, patch: { title?: string; currency?: Currency }): boolean {
-    return Boolean(commitShoppingChange((current) => updateShoppingItem(current, id, patch)));
+  function checkShoppingBase(current: AppData, id: string, base: Transaction | null | undefined, patch: Partial<Transaction>) {
+    if (base === undefined) return;
+    const row = current.shoppingList?.find((item) => item.id === id);
+    if (!row) throw new DataConflictError();
+    const record = current.transactions.find((t) => t.id === row.transactionId);
+    if ((record?.id ?? null) !== (base?.id ?? null)) throw new DataConflictError();
+    if (record && base) for (const field of Object.keys(patch) as (keyof Transaction)[]) {
+      if (record[field] !== base[field] && record[field] !== patch[field]) throw new DataConflictError();
+    }
   }
-  function savePlannedPrice(id: string, amount: number, itemCurrency: Currency): boolean {
+  function updatePlannedItem(id: string, patch: { title?: string; currency?: Currency }, base?: Transaction | null): boolean {
+    return Boolean(commitShoppingChange((current) => {
+      checkShoppingBase(current, id, base, patch);
+      return updateShoppingItem(current, id, patch);
+    }));
+  }
+  function savePlannedPrice(id: string, amount: number, itemCurrency: Currency, base?: Transaction | null, changed?: { amount?: number; currency?: Currency }): boolean {
     const previous = latest.current.data;
     const now = new Date();
     const eventId = createRecordId();
-    const next = commitShoppingChange((current) => saveShoppingPrice(current, id, amount, itemCurrency, eventId, now));
+    const next = commitShoppingChange((current) => {
+      checkShoppingBase(current, id, base, changed ?? { amount, currency: itemCurrency });
+      const row = current.shoppingList?.find((item) => item.id === id);
+      const record = current.transactions.find((t) => t.id === row?.transactionId);
+      return saveShoppingPrice(current, id,
+        changed && changed.amount === undefined && record ? record.amount : amount,
+        changed && changed.currency === undefined && record ? record.currency : itemCurrency,
+        eventId, now);
+    });
     if (!next) return false;
     const increase = next.transactions.length > previous.transactions.length
       ? getStreakIncrease(getStreakStats(previous.transactions, now), getStreakStats(next.transactions, now))
@@ -504,7 +461,7 @@ export default function App() {
   function deleteTransaction(transaction: Transaction) {
     setBountyCelebration(null);
     const linkedItems = new Set(latest.current.data.shoppingList?.filter((item) => item.transactionId === transaction.id).map((item) => item.id));
-    setData((d) => ({
+    const saved = setData((d) => ({
       ...d,
       transactions: d.transactions.filter((t) => t.id !== transaction.id),
       ...(d.shoppingList ? { shoppingList: d.shoppingList.map((item) => {
@@ -513,10 +470,11 @@ export default function App() {
         return pending;
       }) } : {}),
     }));
+    if (!saved) return;
     setToast({
       message: "Расход удалён",
       undo: () => {
-        setData((d) =>
+        const restored = setData((d) =>
           d.transactions.some((t) => t.id === transaction.id)
             ? d
             : {
@@ -526,7 +484,7 @@ export default function App() {
                   linkedItems.has(item.id) && !item.transactionId ? { ...item, transactionId: transaction.id } : item) } : {}),
               },
         );
-        setToast({ message: "Расход восстановлен" });
+        if (restored) setToast({ message: "Расход восстановлен" });
       },
     });
   }
@@ -591,35 +549,33 @@ export default function App() {
     if (!pendingImport) return;
     setBountyCelebration(null);
     if (replaceAll) {
-      setData(pendingImport);
+      if (!commit(pendingImport, true)) return;
       setProfile(pendingImport.profile);
     } else {
-      const existing = new Set(data.transactions.map((t) => t.id));
-      const transactions = [
-        ...data.transactions,
-        ...pendingImport.transactions.filter((t) => !existing.has(t.id)),
-      ];
-      if (transactions.length > 50000) {
-        setToast({
-          message: "В журнале может быть не больше 50 000 записей.",
-          error: true,
-        });
-        return;
-      }
-      const shoppingList = [...(data.shoppingList ?? [])];
-      const shoppingIds = new Set(shoppingList.map((item) => item.id));
-      const linkedExpenses = new Set(shoppingList.flatMap((item) => item.transactionId ? [item.transactionId] : []));
-      for (const item of pendingImport.shoppingList ?? []) {
-        if (shoppingIds.has(item.id) || (item.transactionId && linkedExpenses.has(item.transactionId))) continue;
-        shoppingList.push(item);
-        shoppingIds.add(item.id);
-        if (item.transactionId) linkedExpenses.add(item.transactionId);
-      }
-      if (shoppingList.length > 1000) {
-        setToast({ message: "В списке покупок может быть не больше 1000 товаров.", error: true });
-        return;
-      }
-      setData({ ...data, transactions, ...((data.shoppingList || pendingImport.shoppingList) ? { shoppingList } : {}) });
+      const saved = setData((current) => {
+        const existing = new Set(current.transactions.map((t) => t.id));
+        const transactions = [
+          ...current.transactions,
+          ...pendingImport.transactions.filter((t) => !existing.has(t.id)),
+        ];
+        if (transactions.length > 50000) {
+          throw new Error("В журнале может быть не больше 50 000 записей.");
+        }
+        const shoppingList = [...(current.shoppingList ?? [])];
+        const shoppingIds = new Set(shoppingList.map((item) => item.id));
+        const linkedExpenses = new Set(shoppingList.flatMap((item) => item.transactionId ? [item.transactionId] : []));
+        for (const item of pendingImport.shoppingList ?? []) {
+          if (shoppingIds.has(item.id) || (item.transactionId && linkedExpenses.has(item.transactionId))) continue;
+          shoppingList.push(item);
+          shoppingIds.add(item.id);
+          if (item.transactionId) linkedExpenses.add(item.transactionId);
+        }
+        if (shoppingList.length > 1000) {
+          throw new Error("В списке покупок может быть не больше 1000 товаров.");
+        }
+        return { ...current, transactions, ...((current.shoppingList || pendingImport.shoppingList) ? { shoppingList } : {}) };
+      });
+      if (!saved) return;
     }
     setPendingImport(null);
     setDetailId(null);
@@ -633,8 +589,8 @@ export default function App() {
     if (file) setAvatarSource({ file });
   }
   function saveAvatar(avatar: string) {
+    if (!setData((d) => ({ ...d, profile: { ...d.profile, avatar } }))) return;
     setProfile((p) => ({ ...p, avatar }));
-    setData((d) => ({ ...d, profile: { ...d.profile, avatar } }));
     setAvatarSource(null);
     setToast({ message: "Аватар сохранён" });
   }
@@ -656,15 +612,16 @@ export default function App() {
   function applyDemo() {
     setBountyCelebration(null);
     const demo = createDemoData();
-    setProfile({ ...demo.profile, theme: data.profile.theme, language });
-    setData((d) => ({
+    const next = {
       ...demo,
       profile: {
         ...demo.profile,
-        theme: d.profile.theme,
-        language: d.profile.language,
+        theme: data.profile.theme,
+        language,
       },
-    }));
+    };
+    if (!commit(next, true)) return;
+    setProfile(next.profile);
     setMonth(currentMonth());
     setConfirmation(null);
     setShowDemoBanner(false);
@@ -674,11 +631,11 @@ export default function App() {
   }
   const toggleTheme = () => {
     const dark = document.documentElement.dataset.theme === "dark";
-    setProfile((p) => ({ ...p, theme: dark ? "light" : "dark" }));
-    setData((d) => ({
+    const saved = setData((d) => ({
       ...d,
       profile: { ...d.profile, theme: dark ? "light" : "dark" },
     }));
+    if (saved) setProfile((p) => ({ ...p, theme: saved.profile.theme }));
   };
   const initials = data.profile.name
     .split(/\s+/)
@@ -688,101 +645,6 @@ export default function App() {
     .join("")
     .toUpperCase();
 
-  function TransactionTable({
-    items,
-    compact = false,
-  }: {
-    items: Transaction[];
-    compact?: boolean;
-  }) {
-    return (
-      <div className="table-wrap">
-        <table className="transaction-table">
-          <thead>
-            <tr>
-              <th>{tr("Название")}</th>
-              <th>{tr("Категория")}</th>
-              <th>{tr("Дата")}</th>
-              <th className="amount-cell">{tr("Сумма")}</th>
-              <th>
-                <span className="sr-only">{tr("Действия")}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((t) => (
-              <tr key={t.id}>
-                <td>
-                  <button
-                    type="button"
-                    className="transaction-open"
-                    onClick={() => setDetailId(t.id)}
-                    aria-label={`${tr("Открыть запись")}: ${t.title}`}
-                  >
-                    <CategoryIcon category={t.category} />
-                    <div>
-                      <span className="transaction-name">{t.title}</span>
-                      {(t.items?.length ?? 0) > 0 && (
-                        <small className="item-count">
-                          <ListChecks size={12} />
-                          {t.items!.length}{" "}
-                          {plural(
-                            t.items!.length,
-                            tr("покупка"),
-                            tr("покупки"),
-                            tr("покупок"),
-                            language,
-                          )}
-                        </small>
-                      )}
-                      {t.note && !compact && (
-                        <small className="transaction-note">{t.note}</small>
-                      )}
-                    </div>
-                  </button>
-                </td>
-                <td>
-                  <span className="category-badge">
-                    {tr(
-                      CATEGORIES.find((c) => c.id === t.category)?.label ?? "",
-                    )}
-                  </span>
-                </td>
-                <td className="text-muted date-cell">
-                  {formatDate(t.date, language)}
-                </td>
-                <td className="amount-cell">
-                  <span className="transaction-amount">
-                    −{formatMoney(t.amount, t.currency, language)}
-                  </span>
-                </td>
-                <td>
-                  <div className="row-actions">
-                    <button
-                      className="icon-button"
-                      onClick={() => setModal(t)}
-                      aria-label={`${tr("Изменить")} ${t.title}`}
-                      title={tr("Изменить")}
-                    >
-                      <Pencil size={15} />
-                    </button>
-                    <button
-                      className="icon-button delete-action"
-                      onClick={() => deleteTransaction(t)}
-                      aria-label={`${tr("Удалить")} ${t.title}`}
-                      title={tr("Удалить")}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
   const emptyState = (isFiltered = false) => (
     <div className="empty-state">
       <span className="empty-icon">
@@ -953,18 +815,25 @@ export default function App() {
                 <CircleHelp size={21} />
                 <div>
                   <strong>
-                    {tr("Не удалось сохранить изменения в браузере.")}
+                    {tr(storageStatus === "corrupt" || storageStatus === "recovered"
+                      ? "Обнаружены повреждённые данные. Исходная копия сохранена."
+                      : "Не удалось сохранить изменения в браузере.")}
                   </strong>
                   <p>
-                    {tr(
-                      "Скачайте резервную копию до закрытия страницы, чтобы сохранить записи.",
-                    )}
+                    {tr(storageError || (storageStatus === "corrupt" || storageStatus === "recovered"
+                      ? "Автосохранение приостановлено. Восстановите копию или начните заново."
+                      : "Изменение не применено. Проверьте свободное место и доступ к хранилищу."))}
                   </p>
                 </div>
                 <Button onClick={exportBackup}>
                   <Download size={16} />
                   {tr("Скачать копию")}
                 </Button>
+                {storageStatus === "recovered" && <Button onClick={() => setConfirmation("recovery")}>{tr("Восстановить последнюю копию")}</Button>}
+                {(storageStatus === "corrupt" || storageStatus === "recovered") && <>
+                  <Button onClick={() => navigate("profile")}>{tr("Импортировать копию")}</Button>
+                  <Button onClick={() => setConfirmation("reset")}>{tr("Начать заново")}</Button>
+                </>}
               </div>
             )}
             <div className="page-enter" key={page}>
@@ -1254,7 +1123,7 @@ export default function App() {
                           </button>
                         </div>
                       </div>
-                      <ExpenseChart
+                      <ExpenseChart language={language}
                         transactions={transactions}
                         month={month}
                         range={chartRange}
@@ -1418,7 +1287,7 @@ export default function App() {
                         </button>
                       </div>
                       {sortedTransactions.length ? (
-                        <TransactionTable
+                        <TransactionTable language={language} onOpen={setDetailId} onEdit={setModal} onDelete={deleteTransaction}
                           items={sortedTransactions.slice(0, 5)}
                           compact
                         />
@@ -1617,7 +1486,7 @@ export default function App() {
                       </label>
                     </div>
                     {filtered.length ? (
-                      <TransactionTable items={filtered} />
+                      <TransactionTable items={filtered} language={language} onOpen={setDetailId} onEdit={setModal} onDelete={deleteTransaction} paginationKey={JSON.stringify([search, category, filterCurrency, sort, month, allTime])} />
                     ) : (
                       emptyState(data.transactions.length > 0)
                     )}
@@ -1661,7 +1530,7 @@ export default function App() {
                     className="panel profile-form"
                     onSubmit={(e: FormEvent) => {
                       e.preventDefault();
-                      setData((d) => ({
+                      const saved = setData((d) => mergeAppData({ ...d, profile: profileBase.current }, d, {
                         ...d,
                         profile: {
                           ...profile,
@@ -1669,7 +1538,7 @@ export default function App() {
                           email: profile.email.trim(),
                         },
                       }));
-                      setToast({ message: "Настройки профиля сохранены" });
+                      if (saved) setToast({ message: "Настройки профиля сохранены" });
                     }}
                   >
                     <div className="panel-header">
@@ -1739,11 +1608,11 @@ export default function App() {
                         {data.profile.avatar && (
                           <Button
                             onClick={() => {
-                              setProfile((p) => ({ ...p, avatar: undefined }));
-                              setData((d) => ({
+                              const saved = setData((d) => ({
                                 ...d,
                                 profile: { ...d.profile, avatar: undefined },
                               }));
+                              if (saved) setProfile((p) => ({ ...p, avatar: undefined }));
                             }}
                           >
                             <Trash2 size={15} />
@@ -1820,18 +1689,12 @@ export default function App() {
                             value={profile.currency}
                             onChange={(e) => {
                               const next = e.target.value as Currency;
-                              setProfile((p) => ({
-                                ...p,
-                                currency: next,
-                                monthlyBudget:
-                                  Math.round(
-                                    convertAmount(
-                                      p.monthlyBudget,
-                                      p.currency,
-                                      next,
-                                    ) * 100,
-                                  ) / 100,
-                              }));
+                              try {
+                                const monthlyBudget = convertedBudget(profile.monthlyBudget, profile.currency, next);
+                                setProfile((p) => ({ ...p, currency: next, monthlyBudget }));
+                              } catch (cause) {
+                                setToast({ message: (cause as Error).message, error: true });
+                              }
                             }}
                           >
                             {CURRENCIES.map((c) => (
@@ -1926,11 +1789,11 @@ export default function App() {
                           value={language}
                           onChange={(event) => {
                             const next = event.target.value as Language;
-                            setData((current) => ({
+                            const saved = setData((current) => ({
                               ...current,
                               profile: { ...current.profile, language: next },
                             }));
-                            setProfile((draft) => ({
+                            if (saved) setProfile((draft) => ({
                               ...draft,
                               language: next,
                             }));
@@ -1942,6 +1805,10 @@ export default function App() {
                       </label>
                     </div>
                     <div className="profile-save">
+                      {storageError && <Button onClick={() => {
+                        profileBase.current = data.profile;
+                        setProfile(data.profile);
+                      }}>{tr("Загрузить актуальный профиль")}</Button>}
                       <span>
                         <ShieldCheck size={14} />
                         {tr("Все настройки сохраняются автоматически.")}
@@ -2092,11 +1959,9 @@ export default function App() {
                 void downloadPdf([detailRecord]);
               }}
               onChange={(value) => {
-                setData((d) => ({
-                  ...d,
-                  transactions: d.transactions.map((t) =>
-                    t.id === value.id ? value : t,
-                  ),
+                return Boolean(setData((d) => {
+                  const record = mergeTransactionDraft(detailRecord, d.transactions.find((t) => t.id === value.id), value);
+                  return { ...d, transactions: d.transactions.map((t) => t.id === value.id ? record : t) };
                 }));
               }}
             />
@@ -2150,10 +2015,15 @@ export default function App() {
         )}
         {modal && (
           <TransactionDialog
+            key={modal === "new" ? "new" : JSON.stringify(modal)}
             value={modal === "new" ? null : modal}
             defaultCurrency={currency}
             onClose={() => setModal(null)}
             onSave={saveTransaction}
+            onReload={modal === "new" ? undefined : () => {
+              const current = data.transactions.find((t) => t.id === modal.id);
+              setModal(current ?? null);
+            }}
           />
         )}
         {confirmation && (
@@ -2166,7 +2036,7 @@ export default function App() {
                     : tr("ПОПРОБОВАТЬ НА ПРИМЕРЕ")}
                 </span>
                 <h2>
-                  {confirmation === "reset"
+                  {confirmation === "recovery" ? tr("Восстановить последнюю копию?") : confirmation === "reset"
                     ? tr("Начать с чистого листа?")
                     : tr("Загрузить демо?")}
                 </h2>
@@ -2180,7 +2050,7 @@ export default function App() {
               </button>
             </div>
             <p className="modal-description">
-              {confirmation === "reset"
+              {confirmation === "recovery" ? tr("Повреждённые данные будут сохранены отдельно. Рабочая копия снова станет доступна для изменений.") : confirmation === "reset"
                 ? tr(
                     "Все расходы, список покупок и настройки будут удалены из этого браузера. Перед удалением можно скачать резервную копию.",
                   )
@@ -2201,9 +2071,13 @@ export default function App() {
               <Button
                 variant={confirmation === "reset" ? "danger" : "primary"}
                 onClick={() => {
-                  if (confirmation === "reset") {
+                  if (confirmation === "recovery") {
+                    if (!commit(data, true)) return;
+                    setConfirmation(null);
+                    setToast({ message: "Копия восстановлена" });
+                  } else if (confirmation === "reset") {
                     setBountyCelebration(null);
-                    setData(createEmptyData());
+                    if (!commit(createEmptyData(), true)) return;
                     setProfile(createEmptyData().profile);
                     setMonth(currentMonth());
                     setSearch("");
@@ -2217,7 +2091,7 @@ export default function App() {
                   } else applyDemo();
                 }}
               >
-                {confirmation === "reset"
+                {confirmation === "recovery" ? tr("Восстановить копию") : confirmation === "reset"
                   ? tr("Удалить все данные")
                   : tr("Загрузить демо")}
               </Button>
@@ -2266,156 +2140,6 @@ function plural(
       : v % 10 >= 2 && v % 10 <= 4
         ? few
         : many;
-}
-function ExpenseChart({
-  transactions,
-  month,
-  range,
-  currency,
-}: {
-  transactions: Transaction[];
-  month: string;
-  range: "month" | "week";
-  currency: Currency;
-}) {
-  const { language, tr } = useI18n();
-  const days = new Date(
-    Number(month.slice(0, 4)),
-    Number(month.slice(5)),
-    0,
-  ).getDate();
-  const end = month === currentMonth() ? new Date().getDate() : days;
-  const first = range === "week" ? Math.max(1, end - 6) : 1;
-  const last = range === "week" ? end : days;
-  const values = Array.from({ length: last - first + 1 }, (_, i) => {
-    const day = first + i;
-    const date = `${month}-${String(day).padStart(2, "0")}`;
-    return {
-      day,
-      date,
-      total: transactions
-        .filter((t) => t.date === date)
-        .reduce(
-          (sum, t) => sum + convertAmount(t.amount, t.currency, currency),
-          0,
-        ),
-    };
-  });
-  const maximum = Math.max(100, ...values.map((v) => v.total)) * 1.2;
-  const width = 680,
-    height = 214,
-    bottom = 188,
-    left = 52,
-    right = 668,
-    top = 12;
-  const step = (right - left) / values.length;
-  const [active, setActive] = useState<number | null>(null);
-  const activeValue = active === null ? null : values[active];
-  return (
-    <div className="chart-container">
-      <div className="chart-hover-info" aria-live="polite">
-        {activeValue ? (
-          <>
-            <span>
-              {new Date(`${activeValue.date}T12:00:00`).toLocaleDateString(
-                language === "en" ? "en-US" : "ru-RU",
-                {
-                  day: "numeric",
-                  month: "long",
-                },
-              )}
-            </span>
-            <strong>
-              {formatMoney(activeValue.total, currency, language)}
-            </strong>
-          </>
-        ) : (
-          <span>
-            {transactions.length
-              ? tr("Наведите на столбик для подробностей")
-              : tr("Здесь появится ваша финансовая история")}
-          </span>
-        )}
-      </div>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label={`${tr("Расходы по дням,")} ${monthLabel(month, language)}`}
-        onMouseLeave={() => setActive(null)}
-      >
-        {[0, 1, 2, 3].map((i) => {
-          const y = top + (i * (bottom - top)) / 3;
-          return (
-            <g key={i}>
-              <line
-                x1={left}
-                y1={y}
-                x2={right}
-                y2={y}
-                className="chart-gridline"
-              />
-              <text
-                x={left - 10}
-                y={y + 4}
-                textAnchor="end"
-                className="chart-axis-text"
-              >
-                {Math.round(maximum * (1 - i / 3)).toLocaleString(
-                  language === "en" ? "en-US" : "ru-RU",
-                )}
-              </text>
-            </g>
-          );
-        })}
-        {values.map((v, i) => {
-          const h = (v.total / maximum) * (bottom - top);
-          return (
-            <g key={v.day} onMouseEnter={() => setActive(i)}>
-              <rect
-                x={left + i * step + step * 0.2}
-                y={bottom - Math.max(h, 3)}
-                width={step * 0.6}
-                height={Math.max(h, 3)}
-                rx={Math.min(4, step * 0.25)}
-                fill={
-                  active === i
-                    ? "#A9493B"
-                    : v.total
-                      ? "#C35D4C"
-                      : "var(--chart-empty)"
-                }
-                opacity={active !== null && active !== i ? 0.5 : 1}
-              >
-                <title>
-                  {v.day}: {formatMoney(v.total, currency, language)}
-                </title>
-              </rect>
-              <rect
-                x={left + i * step}
-                y={top}
-                width={step}
-                height={bottom - top}
-                fill="transparent"
-              />
-              {(range === "week" ||
-                i === 0 ||
-                i === values.length - 1 ||
-                v.day % 5 === 0) && (
-                <text
-                  x={left + (i + 0.5) * step}
-                  y={height - 5}
-                  textAnchor="middle"
-                  className="chart-axis-text"
-                >
-                  {String(v.day).padStart(2, "0")}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
 }
 function Modal({
   children,
@@ -2493,11 +2217,13 @@ function TransactionDialog({
   defaultCurrency,
   onClose,
   onSave,
+  onReload,
 }: {
   value: Transaction | null;
   defaultCurrency: Currency;
   onClose: () => void;
-  onSave: (value: Transaction) => void;
+  onSave: (value: Transaction) => true | string;
+  onReload?: () => void;
 }) {
   const { language, tr } = useI18n();
   const [title, setTitle] = useState(value?.title ?? "");
@@ -2516,11 +2242,10 @@ function TransactionDialog({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          const numeric =
-            Math.round(Number(amount.replace(",", ".")) * 100) / 100;
+          const numeric = value && amount === String(value.amount) ? value.amount : parseMoney(amount);
           if (
             !title.trim() ||
-            !Number.isFinite(numeric) ||
+            numeric === null ||
             numeric <= 0 ||
             numeric > 1e12 ||
             !date ||
@@ -2541,9 +2266,9 @@ function TransactionDialog({
             );
             return;
           }
-          onSave({
+          const result = onSave({
             ...value,
-            createdAt: value?.createdAt ?? (value ? value.date : todayString()),
+            createdAt: value ? value.createdAt : todayString(),
             id:
               value?.id ??
               globalThis.crypto?.randomUUID?.() ??
@@ -2553,8 +2278,9 @@ function TransactionDialog({
             currency,
             category,
             date,
-            note: note.trim(),
+            note: value && note === (value.note ?? "") ? value.note : note.trim(),
           });
+          if (result !== true) setError(result);
         }}
       >
         <div className="dialog-header">
@@ -2667,6 +2393,7 @@ function TransactionDialog({
             {tr(error)}
           </p>
         )}
+        {error && onReload && <Button onClick={onReload}>{tr("Загрузить актуальную запись")}</Button>}
         <div className="dialog-footer">
           <span className="dialog-save-hint">
             <ShieldCheck size={14} />

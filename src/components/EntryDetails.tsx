@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   CalendarDays,
@@ -14,6 +14,7 @@ import {
 import { CATEGORIES, formatMoney, getItemTotal } from "../lib/finance";
 import type { Language, Transaction, TransactionItem } from "../lib/finance";
 import { translate } from "../lib/i18n";
+import { parseMoney } from "../lib/storage";
 
 const makeId = () =>
   globalThis.crypto?.randomUUID?.() ??
@@ -28,7 +29,7 @@ export default function EntryDetails({
 }: {
   transaction: Transaction;
   language: Language;
-  onChange: (value: Transaction) => void;
+  onChange: (value: Transaction) => boolean;
   onClose: () => void;
   onEdit: () => void;
   onExport: () => void;
@@ -48,16 +49,19 @@ export default function EntryDetails({
       setError(tr("Сумма покупок не может превышать общую сумму записи."));
       return false;
     }
-    onChange({ ...transaction, items: next });
+    if (!onChange({ ...transaction, items: next })) {
+      setError(tr("Изменения не сохранены. Проверьте актуальные данные и попробуйте ещё раз."));
+      return false;
+    }
     setError("");
     return true;
   }
   function addItem(event: FormEvent) {
     event.preventDefault();
-    const numeric = Math.round(Number(amount.replace(",", ".")) * 100) / 100;
+    const numeric = parseMoney(amount);
     if (
       !title.trim() ||
-      !Number.isFinite(numeric) ||
+      numeric === null ||
       numeric < 0.01 ||
       numeric > 1e12
     ) {
@@ -251,6 +255,7 @@ function ItemRow({
   const [title, setTitle] = useState(item.title);
   const [amount, setAmount] = useState(String(item.amount));
   const [error, setError] = useState("");
+  const baseline = useRef(item);
   useEffect(() => {
     if (!editing) {
       setTitle(item.title);
@@ -259,17 +264,24 @@ function ItemRow({
   }, [item, editing]);
   function submit(e: FormEvent) {
     e.preventDefault();
-    const numeric = Math.round(Number(amount.replace(",", ".")) * 100) / 100;
+    const numeric = parseMoney(amount);
     if (
       !title.trim() ||
-      !Number.isFinite(numeric) ||
+      numeric === null ||
       numeric < 0.01 ||
       numeric > 1e12
     ) {
       setError(tr("Укажите название и сумму не меньше 0,01."));
       return;
     }
-    if (onSave({ ...item, title: title.trim(), amount: numeric })) {
+    const changedTitle = title.trim() !== baseline.current.title;
+    const changedAmount = numeric !== baseline.current.amount;
+    if ((changedTitle && item.title !== baseline.current.title && item.title !== title.trim()) ||
+        (changedAmount && item.amount !== baseline.current.amount && item.amount !== numeric)) {
+      setError(tr("Покупка изменена в другой вкладке. Отмените редактирование и откройте её заново."));
+      return;
+    }
+    if (onSave({ ...item, title: changedTitle ? title.trim() : item.title, amount: changedAmount ? numeric : item.amount })) {
       setEditing(false);
       setError("");
     }
@@ -331,7 +343,7 @@ function ItemRow({
           <button
             type="button"
             className="icon-button"
-            onClick={() => setEditing(true)}
+            onClick={() => { baseline.current = item; setEditing(true); }}
             aria-label={`${tr("Изменить покупку")}: ${item.title}`}
             title={tr("Изменить покупку")}
           >

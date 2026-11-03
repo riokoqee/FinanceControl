@@ -1,15 +1,16 @@
 import {
   CURRENCIES,
+  MAX_AMOUNT,
+  MAX_TRANSACTIONS,
   getItemTotal,
+  parseMoney,
   todayString,
   type AppData,
   type Currency,
   type ShoppingItem,
 } from './finance';
 
-const MAX_PRICE = 1_000_000_000_000;
 const MAX_SHOPPING_ITEMS = 1_000;
-const MAX_TRANSACTIONS = 50_000;
 
 function readText(value: unknown, label: string, limit: number): string {
   if (typeof value !== 'string' || value.length > limit || !value.trim()) {
@@ -36,7 +37,7 @@ function priceInCents(amount: number): number {
     typeof amount !== 'number' ||
     !Number.isFinite(amount) ||
     amount <= 0 ||
-    amount > MAX_PRICE ||
+    amount > MAX_AMOUNT ||
     cents / 100 !== amount
   ) {
     throw new Error('Введите положительную цену до 1 000 000 000 000 с точностью до двух знаков.');
@@ -46,14 +47,7 @@ function priceInCents(amount: number): number {
 
 /** Accept decimal prices and optional, correctly grouped ordinary or nonbreaking spaces. */
 export function parseShoppingPrice(input: string): number | null {
-  const text = input.trim();
-  if (!/^(?:\d+|\d{1,3}(?:[ \u00a0\u202f]\d{3})+)(?:[.,]\d{1,2})?$/.test(text)) {
-    return null;
-  }
-  const [whole, fraction = ''] = text.replace(/[ \u00a0\u202f]/g, '').replace(',', '.').split('.');
-  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
-  if (!Number.isSafeInteger(cents) || cents <= 0 || cents > MAX_PRICE * 100) return null;
-  return cents / 100;
+  return parseMoney(input);
 }
 
 function findItem(data: AppData, id: string): ShoppingItem {
@@ -70,11 +64,14 @@ function normalizeItem(data: AppData, item: ShoppingItem): ShoppingItem {
   const result: ShoppingItem = { id, title, currency: item.currency, createdAt: item.createdAt };
   if (item.transactionId !== undefined) {
     const transactionId = readText(item.transactionId, 'ID связанного расхода', 128);
-    if (data.transactions.some((transaction) => transaction.id === transactionId)) {
+    const transaction = data.transactions.find((entry) => entry.id === transactionId);
+    if (transaction) {
       if (data.shoppingList?.some((entry) => entry.id !== id && entry.transactionId === transactionId)) {
         throw new Error('Этот расход уже связан с другим товаром.');
       }
       result.transactionId = transactionId;
+      result.title = transaction.title;
+      result.currency = transaction.currency;
     }
   }
   return result;
@@ -95,20 +92,26 @@ export function updateShoppingItem(
   id: string,
   patch: { title?: string; currency?: Currency },
 ): AppData {
-  const current = findItem(data, id);
-  const updated = normalizeItem(data, {
+  const current = normalizeItem(data, findItem(data, id));
+  const updated = {
     ...current,
-    title: patch.title === undefined ? current.title : patch.title,
+    title: patch.title === undefined ? current.title : readText(patch.title, 'Название товара', 160),
     currency: patch.currency === undefined ? current.currency : patch.currency,
-  });
+  };
+  checkCurrency(updated.currency);
+  const transactions = updated.transactionId === undefined ? data.transactions : data.transactions.map((transaction) => (
+    transaction.id === updated.transactionId
+      ? {
+        ...transaction,
+        ...(patch.title === undefined ? {} : { title: updated.title }),
+        ...(patch.currency === undefined ? {} : { currency: updated.currency }),
+      }
+      : transaction
+  ));
   return {
     ...data,
     shoppingList: data.shoppingList!.map((item) => item.id === id ? updated : item),
-    transactions: updated.transactionId === undefined ? data.transactions : data.transactions.map((transaction) => (
-      transaction.id === updated.transactionId
-        ? { ...transaction, title: updated.title, currency: updated.currency }
-        : transaction
-    )),
+    transactions,
   };
 }
 
@@ -127,7 +130,7 @@ export function saveShoppingPrice(
   newTransactionId: string,
   now: Date,
 ): AppData {
-  const current = findItem(data, id);
+  const current = normalizeItem(data, findItem(data, id));
   const cents = priceInCents(amount);
   checkCurrency(currency);
   const existing = current.transactionId === undefined ? undefined : data.transactions.find(
@@ -142,7 +145,7 @@ export function saveShoppingPrice(
     }
     transactionId = existing.id;
     transactions = data.transactions.map((transaction) => transaction.id === existing.id
-      ? { ...transaction, title: current.title, amount, currency }
+      ? { ...transaction, amount, currency }
       : transaction);
   } else {
     if (data.transactions.length >= MAX_TRANSACTIONS) {
@@ -171,7 +174,7 @@ export function saveShoppingPrice(
     ...data,
     transactions,
     shoppingList: data.shoppingList!.map((item) => item.id === id
-      ? { ...item, currency, transactionId }
+      ? { ...item, title: current.title, currency, transactionId }
       : item),
   };
 }

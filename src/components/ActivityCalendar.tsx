@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -44,9 +45,53 @@ export default function ActivityCalendar({
     } else if (container) container.scrollLeft = 0;
   }, [year]);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [focusedDay, setFocusedDay] = useState(todayString);
+  const keyboardHintId = useId();
   const counts = useMemo(() => getActivityCounts(transactions), [transactions]);
   const today = todayString();
   const locale = language === "en" ? "en-US" : "ru-RU";
+  const firstEnabledDay = `${year}-01-01`;
+  const lastEnabledDay = year === thisYear ? today : `${year}-12-31`;
+  const tabDay = focusedDay >= firstEnabledDay && focusedDay <= lastEnabledDay
+    ? focusedDay
+    : year === thisYear ? today : firstEnabledDay;
+  const revealDay = (button: HTMLButtonElement) => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const bounds = container.getBoundingClientRect();
+    const dayBounds = button.getBoundingClientRect();
+    if (dayBounds.left < bounds.left + 3) {
+      container.scrollLeft -= bounds.left + 3 - dayBounds.left;
+    } else if (dayBounds.right > bounds.right - 3) {
+      container.scrollLeft += dayBounds.right - bounds.right + 3;
+    }
+  };
+  const moveDayFocus = (event: KeyboardEvent<HTMLButtonElement>, date: string) => {
+    const next = new Date(`${date}T12:00:00`);
+    const weekday = (next.getDay() + 6) % 7;
+    switch (event.key) {
+      case "ArrowUp": next.setDate(next.getDate() - 1); break;
+      case "ArrowDown": next.setDate(next.getDate() + 1); break;
+      case "ArrowLeft": next.setDate(next.getDate() - 7); break;
+      case "ArrowRight": next.setDate(next.getDate() + 7); break;
+      case "Home":
+        if (event.ctrlKey || event.metaKey) next.setFullYear(year, 0, 1);
+        else next.setDate(next.getDate() - weekday);
+        break;
+      case "End":
+        if (event.ctrlKey || event.metaKey) next.setFullYear(year, 11, 31);
+        else next.setDate(next.getDate() + 6 - weekday);
+        break;
+      default: return;
+    }
+    event.preventDefault();
+    const nextDate = todayString(next);
+    const bounded = nextDate < firstEnabledDay ? firstEnabledDay : nextDate > lastEnabledDay ? lastEnabledDay : nextDate;
+    setFocusedDay(bounded);
+    const button = scrollRef.current?.querySelector<HTMLButtonElement>(`button[data-date="${bounded}"]`);
+    button?.focus({ preventScroll: true });
+    if (button) revealDay(button);
+  };
   const first = new Date(year, 0, 1, 12);
   first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
   const last = new Date(year, 11, 31, 12);
@@ -141,6 +186,11 @@ export default function ActivityCalendar({
           </button>
         </div>
       </div>
+      <p id={keyboardHintId} className="sr-only">
+        {language === "en"
+          ? "Use Up and Down to move one day, Left and Right to move one week. Home and End move to the first and last day of the week; Control plus Home or End moves to the start or end of the year. Press Enter or Space to select a day."
+          : "Стрелки вверх и вниз перемещают на день, влево и вправо — на неделю. Home и End переходят к началу и концу недели; Control с Home или End — к началу или концу года. Нажмите Enter или пробел, чтобы выбрать день."}
+      </p>
       <div className="activity-scroll" ref={scrollRef}>
         <div
           className="activity-inner"
@@ -183,6 +233,7 @@ export default function ActivityCalendar({
               className="activity-grid"
               role="group"
               aria-label={tr("Активность по дням")}
+              aria-describedby={keyboardHintId}
             >
               {weeks.map((week, index) => (
                 <div className="activity-week" key={index}>
@@ -196,11 +247,22 @@ export default function ActivityCalendar({
                         className={`activity-day ${d.date === today ? "activity-today" : ""} ${d.date === selectedDay ? "activity-selected" : ""}`}
                         data-level={future ? 0 : getActivityLevel(d.count)}
                         data-future={future || undefined}
+                        data-date={d.date}
+                        tabIndex={!future && d.date === tabDay ? 0 : -1}
                         title={label}
                         aria-label={label}
                         aria-pressed={selectedDay === d.date}
+                        aria-current={d.date === today ? "date" : undefined}
                         disabled={future}
-                        onClick={() => setSelectedDay(d.date)}
+                        onFocus={(event) => {
+                          setFocusedDay(d.date);
+                          revealDay(event.currentTarget);
+                        }}
+                        onKeyDown={(event) => moveDayFocus(event, d.date)}
+                        onClick={() => {
+                          setFocusedDay(d.date);
+                          setSelectedDay(d.date);
+                        }}
                       />
                     ) : (
                       <span
