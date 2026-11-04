@@ -178,3 +178,18 @@ export function saveShoppingPrice(
       : item),
   };
 }
+
+/** Confirm a purchase and remove its plan in one immutable change, keeping the expense. */
+export function confirmShoppingPurchase(
+  data: AppData,
+  id: string,
+  amount: number,
+  currency: Currency,
+  newTransactionId: string,
+  now: Date,
+  patch?: { title?: string },
+): AppData {
+  const prepared = patch?.title === undefined ? data : updateShoppingItem(data, id, { title: patch.title });
+  const purchased = saveShoppingPrice(prepared, id, amount, currency, newTransactionId, now);
+  return removeShoppingItem(purchased, id);
+}

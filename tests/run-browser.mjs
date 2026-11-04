@@ -24,6 +24,7 @@ try {
   if (!ready) throw new Error(`Preview did not start: ${url}`);
   await run('tests/browser-regressions.mjs');
   await run('tests/persistence-browser.mjs');
+  await run('tests/shopping-confirmation.mjs');
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

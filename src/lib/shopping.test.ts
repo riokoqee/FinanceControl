@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_TRANSACTIONS,
   STORAGE_KEY,
   createEmptyData,
   getActivityCounts,
@@ -13,6 +14,7 @@ import {
 } from './finance';
 import {
   addShoppingItem,
+  confirmShoppingPurchase,
   parseShoppingPrice,
   removeShoppingItem,
   saveShoppingPrice,
@@ -209,6 +211,123 @@ describe('planned products and recorded expenses', () => {
     expect(() => addShoppingItem(data, plannedItem({ id: 'new', createdAt: '2026-02-30' }))).toThrow(/дат/);
     const paid = purchasedData();
     expect(() => addShoppingItem(paid, plannedItem({ id: 'other', transactionId: 'expense-bread' }))).toThrow(/другим товаром/);
+  });
+});
+
+describe('confirming a shopping purchase', () => {
+  it('creates an expense and removes only the confirmed pending product atomically', () => {
+    const before = addShoppingItem(plannedData(), plannedItem({ id: 'milk', title: 'Молоко' }));
+    const snapshot = structuredClone(before);
+    const confirmed = confirmShoppingPurchase(
+      before, 'bread', 2.75, 'EUR', 'confirmed-bread', new Date(2026, 10, 4, 12),
+    );
+    expect(confirmed.shoppingList).toEqual([plannedItem({ id: 'milk', title: 'Молоко' })]);
+    expect(confirmed.transactions).toEqual([{
+      id: 'confirmed-bread', title: 'Батон', amount: 2.75, currency: 'EUR',
+      category: 'food', date: '2026-11-04', createdAt: '2026-11-04',
+    }]);
+    expect(getMonthTotal(confirmed.transactions, '2026-11', 'EUR')).toBe(2.75);
+    expect(getActivityCounts(confirmed.transactions)).toEqual({ '2026-11-04': 1 });
+    expect(validateBackup(confirmed)).toEqual(confirmed);
+    expect(before).toEqual(snapshot);
+  });
+
+  it('applies an explicit pending title to the expense before removing the row', () => {
+    const before = plannedData();
+    const confirmed = confirmShoppingPurchase(
+      before, 'bread', 4, 'USD', 'new-expense', new Date(2026, 10, 4), { title: '  Свежий батон  ' },
+    );
+    expect(confirmed.transactions[0]).toMatchObject({ title: 'Свежий батон', amount: 4, currency: 'USD' });
+    expect(confirmed.shoppingList).toEqual([]);
+    expect(before.shoppingList?.[0].title).toBe('Батон');
+  });
+
+  it('reuses an already recorded expense and preserves live title, dates, category, note and details', () => {
+    const before = purchasedData();
+    before.transactions[0] = {
+      ...before.transactions[0], title: 'Название из расходов', category: 'other', date: '2026-09-01',
+      note: 'Сохранить заметку', items: [{ id: 'piece', title: 'Половина', amount: 1 }],
+    };
+    const snapshot = structuredClone(before);
+    const confirmed = confirmShoppingPurchase(
+      before, 'bread', 3.5, 'KZT', 'unused-new-id', new Date(2026, 10, 4),
+    );
+    expect(confirmed.transactions).toEqual([{ ...before.transactions[0], amount: 3.5, currency: 'KZT' }]);
+    expect(confirmed.transactions[0].items).toBe(before.transactions[0].items);
+    expect(confirmed.shoppingList).toEqual([]);
+    expect(before).toEqual(snapshot);
+  });
+
+  it('updates an explicit title on the existing expense without creating a duplicate', () => {
+    const before = purchasedData();
+    const confirmed = confirmShoppingPurchase(
+      before, 'bread', 3, 'EUR', 'must-not-create', new Date(2026, 10, 4), { title: 'Хлеб' },
+    );
+    expect(confirmed.transactions).toEqual([{ ...before.transactions[0], title: 'Хлеб', amount: 3 }]);
+    expect(confirmed.shoppingList).toEqual([]);
+    expect(() => confirmShoppingPurchase(
+      confirmed, 'bread', 3, 'EUR', 'another-id', new Date(2026, 10, 4),
+    )).toThrow(/не найден/);
+    expect(confirmed.transactions).toHaveLength(1);
+    expect(before.transactions[0].title).toBe('Батон');
+  });
+
+  it.each([0, -1, NaN, Infinity, 0.001, 1e12 + 0.01])('rejects price %s without applying a title or removing the product', (amount) => {
+    const before = purchasedData();
+    const snapshot = structuredClone(before);
+    expect(() => confirmShoppingPurchase(
+      before, 'bread', amount, 'EUR', 'unused', new Date(), { title: 'Новое название' },
+    )).toThrow(/цену/);
+    expect(before).toEqual(snapshot);
+  });
+
+  it.each([' ', 'x'.repeat(161)])('rejects an invalid title without changing the expense or list', (title) => {
+    const before = purchasedData();
+    const snapshot = structuredClone(before);
+    expect(() => confirmShoppingPurchase(
+      before, 'bread', 3, 'EUR', 'unused', new Date(), { title },
+    )).toThrow(/Название/);
+    expect(before).toEqual(snapshot);
+  });
+
+  it('rejects a price below the itemized sum without keeping an intermediate rename', () => {
+    const before = purchasedData();
+    before.transactions[0].items = [{ id: 'detail', title: 'Батон', amount: 2 }];
+    const snapshot = structuredClone(before);
+    expect(() => confirmShoppingPurchase(
+      before, 'bread', 1, 'USD', 'unused', new Date(), { title: 'Хлеб' },
+    )).toThrow(/суммы покупок/);
+    expect(before).toEqual(snapshot);
+  });
+
+  it('leaves the plan intact when recording another expense would exceed the transaction limit', () => {
+    const before = plannedData();
+    before.transactions = Array.from({ length: MAX_TRANSACTIONS }, (_, index) => ({
+      id: `existing-${index}`, title: 'Расход', amount: 1, currency: 'EUR', category: 'food', date: '2026-11-04',
+    }));
+    const firstTransaction = before.transactions[0];
+    const originalList = before.shoppingList;
+    expect(() => confirmShoppingPurchase(
+      before, 'bread', 2, 'EUR', 'new', new Date(), { title: 'Новое название' },
+    )).toThrow(/50 000/);
+    expect(before.shoppingList).toBe(originalList);
+    expect(before.shoppingList).toEqual([plannedItem()]);
+    expect(before.transactions).toHaveLength(MAX_TRANSACTIONS);
+    expect(before.transactions[0]).toBe(firstTransaction);
+    expect(before.transactions.some((transaction) => transaction.id === 'new')).toBe(false);
+  });
+
+  it('still confirms a linked expense at the transaction limit without allocating another ID', () => {
+    const before = purchasedData();
+    before.transactions.push(...Array.from({ length: MAX_TRANSACTIONS - 1 }, (_, index) => ({
+      id: `other-${index}`, title: 'Расход', amount: 1, currency: 'EUR' as const,
+      category: 'food' as const, date: '2026-11-04',
+    })));
+    const confirmed = confirmShoppingPurchase(before, 'bread', 3, 'EUR', 'unused', new Date());
+    expect(confirmed.transactions).toHaveLength(MAX_TRANSACTIONS);
+    expect(confirmed.transactions[0]).toEqual({ ...before.transactions[0], amount: 3 });
+    expect(confirmed.shoppingList).toEqual([]);
+    expect(before.shoppingList).toHaveLength(1);
   });
 });
 

@@ -6,6 +6,14 @@ import type { Currency, Language, ShoppingItem, Transaction } from "../lib/finan
 import { parseShoppingPrice } from "../lib/shopping";
 import "./ShoppingList.css";
 
+export interface ShoppingPurchaseConfirmation {
+  amount: number;
+  currency: Currency;
+  title?: string;
+  base: Transaction | null;
+  changed: Partial<Pick<Transaction, "title" | "amount" | "currency">>;
+}
+
 interface ShoppingListProps {
   items: ShoppingItem[];
   transactions: Transaction[];
@@ -15,6 +23,7 @@ interface ShoppingListProps {
   onPriceChange: (id: string, amount: number, currency: Currency, base?: Transaction | null, changed?: { amount?: number; currency?: Currency }) => boolean;
   onUpdate: (id: string, patch: { title?: string; currency?: Currency }, base?: Transaction | null) => boolean;
   onRemove: (id: string) => boolean;
+  onConfirm: (id: string, purchase: ShoppingPurchaseConfirmation) => boolean;
 }
 
 const copy = {
@@ -32,11 +41,11 @@ const copy = {
     filters: "Показать покупки",
     totals: "Стоимость купленного",
     empty: "Собираемся за продуктами?",
-    emptyDescription: "Добавьте первый продукт выше. Цену можно вписать после покупки — она сохранится сама.",
+    emptyDescription: "Добавьте продукты, а после покупки впишите цену и подтвердите — расход сохранится, товар уйдёт из списка.",
     emptyFilter: "Здесь пока нет продуктов",
     emptyPending: "Все продукты из списка уже куплены.",
     emptyPurchased: "Впишите цену рядом с продуктом, и он появится здесь.",
-    explanation: "Продукты с ценой уже учтены в журнале расходов, в категории «Еда и продукты». Удаление строки из списка сохраняет запись о расходе.",
+    explanation: "Введите цену и нажмите «Подтвердить покупку»: товар исчезнет из списка, а расход останется в категории «Еда и продукты». Цены также сохраняются автоматически, пока вы заполняете список.",
     auto: "Сохраняется автоматически",
     saving: "Сохраняем…",
     saved: "Сохранено",
@@ -49,6 +58,7 @@ const copy = {
     loadCurrent: "Загрузить актуальные",
     keepDraft: "Сохранить мои изменения",
     remove: "Удалить из списка",
+    confirm: "Подтвердить покупку",
     title: "Название продукта",
     list: "Продукты в списке покупок",
   },
@@ -66,11 +76,11 @@ const copy = {
     filters: "Show purchases",
     totals: "Purchased total",
     empty: "Getting ready for groceries?",
-    emptyDescription: "Add your first product above. Enter the price after buying it — it saves automatically.",
+    emptyDescription: "Add your groceries, then enter the price and confirm after buying. The expense stays; the item leaves your list.",
     emptyFilter: "No products here yet",
     emptyPending: "Everything on your list has been purchased.",
     emptyPurchased: "Enter a price beside a product to see it here.",
-    explanation: "Products with a price are already included in the expense journal under Food & groceries. Removing a row keeps its expense record.",
+    explanation: "Enter the price and choose Confirm purchase: the item leaves your list and its expense stays under Food & groceries. Prices also save automatically while you fill in the list.",
     auto: "Saves automatically",
     saving: "Saving…",
     saved: "Saved",
@@ -83,6 +93,7 @@ const copy = {
     loadCurrent: "Load current values",
     keepDraft: "Keep my changes",
     remove: "Remove from list",
+    confirm: "Confirm purchase",
     title: "Product name",
     list: "Shopping list products",
   },
@@ -94,7 +105,7 @@ type RegisterFlush = (id: string, flush: (() => void) | null) => void;
 const SAVE_DELAY = 600;
 
 export default function ShoppingList({
-  items, transactions, defaultCurrency, language, onAdd, onPriceChange, onUpdate, onRemove,
+  items, transactions, defaultCurrency, language, onAdd, onPriceChange, onUpdate, onRemove, onConfirm,
 }: ShoppingListProps) {
   const text = copy[language];
   const [title, setTitle] = useState("");
@@ -102,6 +113,7 @@ export default function ShoppingList({
   const [error, setError] = useState<"name" | "save" | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const addId = useId();
   const flushers = useRef(new Map<string, () => void>());
   const registerFlush = useCallback<RegisterFlush>((id, flush) => {
@@ -156,6 +168,18 @@ export default function ShoppingList({
     inputRef.current?.focus();
   }
 
+  function confirm(id: string, purchase: ShoppingPurchaseConfirmation) {
+    const rows = Array.from(listRef.current?.children ?? []);
+    const index = rows.findIndex((row) => (row as HTMLElement).dataset.shoppingItem === id);
+    const next = rows[index + 1] ?? rows[index - 1];
+    if (!onConfirm(id, purchase)) return false;
+    requestAnimationFrame(() => {
+      const target = next?.isConnected ? next.querySelector<HTMLInputElement>(".shopping-title-input") : null;
+      (target ?? inputRef.current)?.focus();
+    });
+    return true;
+  }
+
   return (
     <section className="shopping-page" aria-labelledby={`${addId}-heading`}>
       <h2 id={`${addId}-heading`} className="shopping-sr-only">{text.heading}</h2>
@@ -202,7 +226,7 @@ export default function ShoppingList({
           >{text[value]}</button>)}
         </div>}
 
-        {visible.length ? <ul className="shopping-items" aria-label={text.list}>
+        {visible.length ? <ul className="shopping-items" aria-label={text.list} ref={listRef}>
           {visible.map((item) => <ShoppingRow
             key={item.id}
             item={item}
@@ -211,6 +235,7 @@ export default function ShoppingList({
             onPriceChange={onPriceChange}
             onUpdate={onUpdate}
             onRemove={onRemove}
+            onConfirm={confirm}
             registerFlush={registerFlush}
           />)}
         </ul> : <div className="shopping-empty">
@@ -229,13 +254,14 @@ export default function ShoppingList({
   );
 }
 
-function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onRemove, registerFlush }: {
+function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onRemove, onConfirm, registerFlush }: {
   item: ShoppingItem;
   transaction?: Transaction;
   language: Language;
   onPriceChange: ShoppingListProps["onPriceChange"];
   onUpdate: ShoppingListProps["onUpdate"];
   onRemove: ShoppingListProps["onRemove"];
+  onConfirm: ShoppingListProps["onConfirm"];
   registerFlush: RegisterFlush;
 }) {
   const text = copy[language];
@@ -253,8 +279,8 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const discarded = useRef(false);
   const focused = useRef({ price: false, title: false, currency: false });
-  const latest = useRef({ item, transaction, onPriceChange, onUpdate });
-  latest.current = { item, transaction, onPriceChange, onUpdate };
+  const latest = useRef({ item, transaction, onPriceChange, onUpdate, onConfirm });
+  latest.current = { item, transaction, onPriceChange, onUpdate, onConfirm };
   const draft = useRef({ title: initialTitle, price: transaction ? String(transaction.amount) : "", currency: initialCurrency, priceDirty: false, currencyDirty: false, titleDirty: false });
   const saved = useRef({ title: initialTitle, amount: transaction?.amount ?? null, currency: initialCurrency });
   // Each field keeps the expense it was read from until its draft is saved or discarded.
@@ -383,6 +409,38 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
     }
   }
 
+  function confirmPurchase() {
+    cancelTimer();
+    syncUntouched();
+    if (discarded.current || blockConflict()) return;
+    const value = draft.current;
+    const amount = parseShoppingPrice(value.price);
+    if (amount === null) { setPriceError("invalid"); setStatus("idle"); return; }
+    const nextTitle = value.title.trim();
+    if (!nextTitle) { setTitleError("invalid"); setStatus("idle"); return; }
+    const current = latest.current;
+    const source = current.transaction ?? baseline.current.price ?? baseline.current.title;
+    const base = source ? { ...source, title: saved.current.title, amount: saved.current.amount ?? source.amount, currency: saved.current.currency } : null;
+    // Prevent the unmount cleanup from flushing a row that has just been completed.
+    discarded.current = true;
+    const ok = current.onConfirm(current.item.id, {
+      amount,
+      currency: value.currency,
+      ...(value.titleDirty ? { title: nextTitle } : {}),
+      base,
+      changed: {
+        ...(value.priceDirty ? { amount } : {}),
+        ...(value.currencyDirty ? { currency: value.currency } : {}),
+        ...(value.titleDirty ? { title: nextTitle } : {}),
+      },
+    });
+    if (!ok) {
+      discarded.current = false;
+      setPriceError("save");
+      setStatus("failed");
+    }
+  }
+
   function resolveConflict(keepDraft: boolean) {
     cancelTimer();
     const current = latest.current;
@@ -430,7 +488,7 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
   }
 
   function isRowControl(target: EventTarget | null) {
-    return target instanceof HTMLElement && Boolean(target.closest(".shopping-currency, .shopping-remove, .shopping-conflict-actions"));
+    return target instanceof HTMLElement && Boolean(target.closest(".shopping-currency, .shopping-remove, .shopping-confirm, .shopping-conflict-actions"));
   }
 
   const hasUnsavedDraft = draft.current.titleDirty || draft.current.priceDirty || draft.current.currencyDirty;
@@ -457,7 +515,7 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
           onBlur={(event) => {
             focused.current.title = false;
             syncUntouched();
-            if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".shopping-remove, .shopping-conflict-actions"))) saveTitle();
+            if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(".shopping-remove, .shopping-confirm, .shopping-conflict-actions"))) saveTitle();
           }}
           onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveTitle(); } }}
         />
@@ -502,6 +560,14 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
           onBlur={(event) => { focused.current.currency = false; syncUntouched(); if (!isRowControl(event.relatedTarget)) savePrice(); }}
         >{CURRENCIES.map(({ code }) => <option key={code} value={code}>{code}</option>)}</select>
         <span className="shopping-save-status" id={`${id}-save-status`} role="status" aria-live="polite">{!priceError && !titleError && !conflict && stateText}</span>
+        {(price.trim() || transaction) && <button
+          className="shopping-confirm"
+          type="button"
+          aria-label={`${text.confirm}: ${title || item.title}`}
+          disabled={conflict}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={confirmPurchase}
+        ><CheckCheck size={16} aria-hidden="true" />{text.confirm}</button>}
       </div>
       <button
         className="shopping-remove"

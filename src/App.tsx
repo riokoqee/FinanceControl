@@ -68,7 +68,8 @@ import ActivityCalendar from "./components/ActivityCalendar";
 import EntryDetails from "./components/EntryDetails";
 import AvatarCropper from "./components/AvatarCropper";
 import ShoppingList from "./components/ShoppingList";
-import { addShoppingItem, removeShoppingItem, saveShoppingPrice, updateShoppingItem } from "./lib/shopping";
+import type { ShoppingPurchaseConfirmation } from "./components/ShoppingList";
+import { addShoppingItem, confirmShoppingPurchase, removeShoppingItem, saveShoppingPrice, updateShoppingItem } from "./lib/shopping";
 import StreakBounty, {
   StreakBadge,
   useStreakStats,
@@ -457,6 +458,34 @@ export default function App() {
   }
   function removePlannedItem(id: string): boolean {
     return Boolean(commitShoppingChange((current) => removeShoppingItem(current, id)));
+  }
+  function confirmPlannedPurchase(id: string, purchase: ShoppingPurchaseConfirmation): boolean {
+    const previous = latest.current.data;
+    const now = new Date();
+    const eventId = createRecordId();
+    const next = commitShoppingChange((current) => {
+      checkShoppingBase(current, id, purchase.base, purchase.changed);
+      const row = current.shoppingList?.find((item) => item.id === id);
+      const record = current.transactions.find((t) => t.id === row?.transactionId);
+      return confirmShoppingPurchase(current, id,
+        purchase.changed.amount === undefined && record ? record.amount : purchase.amount,
+        purchase.changed.currency === undefined ? record?.currency ?? row?.currency ?? purchase.currency : purchase.currency,
+        eventId, now,
+        purchase.changed.title === undefined ? undefined : { title: purchase.title },
+      );
+    });
+    if (!next) return false;
+    const increase = next.transactions.length > previous.transactions.length
+      ? getStreakIncrease(getStreakStats(previous.transactions, now), getStreakStats(next.transactions, now))
+      : null;
+    setBountyCelebration(increase ? { ...increase, id: eventId, expiresAt: Date.now() + 6000, page } : null);
+    setToast({
+      message: increase?.promoted
+        ? `${tr("Покупка подтверждена. Расход сохранён.")} ${language === "en" ? "New pirate rank" : "Новый пиратский ранг"}: ${increase.rank.name[language]}!`
+        : tr("Покупка подтверждена. Расход сохранён."),
+      pirate: increase?.promoted,
+    });
+    return true;
   }
   function deleteTransaction(transaction: Transaction) {
     setBountyCelebration(null);
@@ -1371,6 +1400,7 @@ export default function App() {
                   onPriceChange={savePlannedPrice}
                   onUpdate={updatePlannedItem}
                   onRemove={removePlannedItem}
+                  onConfirm={confirmPlannedPurchase}
                 />
               )}
               {page === "tracker" && (

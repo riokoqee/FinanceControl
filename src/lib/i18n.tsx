@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Language } from "./finance";
 
 const english: Readonly<Record<string, string>> = {
+  "Покупка подтверждена. Расход сохранён.": "Purchase confirmed. Expense saved.",
   "Загрузить актуальный профиль": "Load current profile",
   "После смены валюты бюджет превышает допустимый максимум. Сначала уменьшите бюджет.": "The converted budget exceeds the limit. Reduce your budget before changing currency.",
   "Обнаружены повреждённые данные. Исходная копия сохранена.": "Damaged data detected. The original copy is preserved.",
