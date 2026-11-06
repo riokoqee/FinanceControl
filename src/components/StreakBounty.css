@@ -1,9 +1,3 @@
-.streak-nav-badge { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-muted); color: var(--muted); font-size: 12px; font-weight: 650; white-space: nowrap; }
-.streak-nav-badge:hover { border-color: var(--gold); background: var(--surface-hover); }
-.streak-nav-badge--active { color: var(--accent-strong); border-color: var(--line); background: var(--accent-soft); }
-.streak-nav-badge--active > svg { fill: #c35d4c20; }
-.streak-nav-badge-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--green); }
-
 .streak-bounty {
   --pirate-metal: #957246;
   position: relative;

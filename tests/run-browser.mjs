@@ -25,6 +25,7 @@ try {
   await run('tests/browser-regressions.mjs');
   await run('tests/persistence-browser.mjs');
   await run('tests/shopping-confirmation.mjs');
+  await run('tests/performance-regressions.mjs');
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

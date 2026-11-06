@@ -45,6 +45,12 @@ describe("daily recording streak and fictional berry bounty", () => {
     });
   });
 
+  it("keeps the same streak for a large history with many records on each day", () => {
+    const days = ["2026-10-25", "2026-10-26", "2026-10-27"];
+    const records = Array.from({ length: 50_000 }, (_, index) => record(days[index % days.length]));
+    expect(getStreakStats(records, now)).toMatchObject({ current: 3, longest: 3, bounty: 1_500_000 });
+  });
+
   it("keeps yesterday’s streak available until the end of today", () => {
     const records = [record("2026-10-25"), record("2026-10-26")];
     expect(getStreakStats(records, now)).toMatchObject({

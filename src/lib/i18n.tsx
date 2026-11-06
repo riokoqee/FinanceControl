@@ -3,6 +3,19 @@ import type { ReactNode } from "react";
 import type { Language } from "./finance";
 
 const english: Readonly<Record<string, string>> = {
+  "Тема оформления": "Appearance",
+  "Один лимит для всех месяцев.": "One budget for every month.",
+  "Данные и резервные копии": "Data and backups",
+  "Записи хранятся в этом браузере. PDF-копия поможет перенести их на другое устройство.": "Records stay in this browser. Use a PDF backup to move them to another device.",
+  "PDF содержит расходы, список покупок, аватар и настройки.": "The PDF includes expenses, your shopping list, avatar and settings.",
+  "Курсы не обновляются. Расходы хранятся в исходной валюте.": "Rates are fixed. Expenses keep their original currency.",
+  "Записывайте траты и держите курс к цели.": "Log your spending and stay on course.",
+  "Бюджет помогает планировать траты.": "Use your budget to plan spending.",
+  "Задайте лимит и следите за остатком.": "Set a limit and track what remains.",
+
+  "Загрузка…": "Loading…",
+  "Обновить страницу": "Reload page",
+  "Не удалось загрузить раздел. Проверьте соединение и обновите страницу.": "This section could not load. Check your connection and reload the page.",
   "Покупка подтверждена. Расход сохранён.": "Purchase confirmed. Expense saved.",
   "Загрузить актуальный профиль": "Load current profile",
   "После смены валюты бюджет превышает допустимый максимум. Сначала уменьшите бюджет.": "The converted budget exceeds the limit. Reduce your budget before changing currency.",

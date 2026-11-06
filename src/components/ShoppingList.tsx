@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Check, CheckCheck, ListChecks, Plus, Trash2 } from "lucide-react";
 import { CURRENCIES, formatMoney } from "../lib/finance";
@@ -45,7 +45,10 @@ const copy = {
     emptyFilter: "Здесь пока нет продуктов",
     emptyPending: "Все продукты из списка уже куплены.",
     emptyPurchased: "Впишите цену рядом с продуктом, и он появится здесь.",
-    explanation: "Введите цену и нажмите «Подтвердить покупку»: товар исчезнет из списка, а расход останется в категории «Еда и продукты». Цены также сохраняются автоматически, пока вы заполняете список.",
+    explanation: "Цена сохраняется автоматически. «Подтвердить покупку» убирает товар из списка и оставляет расход в журнале.",
+    showMore: "Показать ещё",
+    shown: "Показано",
+    of: "из",
     auto: "Сохраняется автоматически",
     saving: "Сохраняем…",
     saved: "Сохранено",
@@ -80,7 +83,10 @@ const copy = {
     emptyFilter: "No products here yet",
     emptyPending: "Everything on your list has been purchased.",
     emptyPurchased: "Enter a price beside a product to see it here.",
-    explanation: "Enter the price and choose Confirm purchase: the item leaves your list and its expense stays under Food & groceries. Prices also save automatically while you fill in the list.",
+    explanation: "Prices save automatically. Confirm purchase clears the item from your list and keeps the expense in your journal.",
+    showMore: "Show more",
+    shown: "Showing",
+    of: "of",
     auto: "Saves automatically",
     saving: "Saving…",
     saved: "Saved",
@@ -103,6 +109,7 @@ type Filter = "all" | "pending" | "purchased";
 type SaveStatus = "idle" | "saving" | "saved" | "failed";
 type RegisterFlush = (id: string, flush: (() => void) | null) => void;
 const SAVE_DELAY = 600;
+const INITIAL_ROWS = 50;
 
 export default function ShoppingList({
   items, transactions, defaultCurrency, language, onAdd, onPriceChange, onUpdate, onRemove, onConfirm,
@@ -112,6 +119,9 @@ export default function ShoppingList({
   const [currency, setCurrency] = useState(defaultCurrency);
   const [error, setError] = useState<"name" | "save" | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
+  const [visibleLimit, setVisibleLimit] = useState(INITIAL_ROWS);
+  const [locallyAddedIds, setLocallyAddedIds] = useState<Set<string>>(() => new Set());
+  const beforeAdd = useRef<{ ids: Set<string>; title: string; currency: Currency } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const addId = useId();
@@ -137,19 +147,42 @@ export default function ShoppingList({
     () => new Map(transactions.map((transaction) => [transaction.id, transaction])),
     [transactions],
   );
-  const purchased = items.filter((item) => item.transactionId && transactionMap.has(item.transactionId));
-  const pendingCount = items.length - purchased.length;
-  const visible = items.filter((item) => {
+  const { purchasedCount, pendingCount, totals } = useMemo(() => {
+    let purchasedCount = 0;
+    const cents = { USD: 0, EUR: 0, KZT: 0 };
+    for (const item of items) {
+      const transaction = item.transactionId ? transactionMap.get(item.transactionId) : undefined;
+      if (!transaction) continue;
+      purchasedCount++;
+      cents[transaction.currency] += Math.round(transaction.amount * 100);
+    }
+    return {
+      purchasedCount,
+      pendingCount: items.length - purchasedCount,
+      totals: CURRENCIES.map(({ code }) => ({ currency: code, amount: cents[code] / 100 }))
+        .filter(({ amount }) => amount > 0),
+    };
+  }, [items, transactionMap]);
+  const visible = useMemo(() => items.filter((item) => {
     const paid = Boolean(item.transactionId && transactionMap.has(item.transactionId));
     return filter === "all" || (filter === "purchased" ? paid : !paid);
-  });
-  const totals = CURRENCIES.map(({ code }) => ({
-    currency: code,
-    amount: purchased.reduce((total, item) => {
-      const transaction = transactionMap.get(item.transactionId!);
-      return total + (transaction?.currency === code ? Math.round(transaction.amount * 100) : 0);
-    }, 0) / 100,
-  })).filter(({ amount }) => amount > 0);
+  }), [items, transactionMap, filter]);
+  // Keep revealed rows mounted so their drafts and 600 ms save timers survive.
+  const shown = useMemo(() => visible.filter((item, index) => index < visibleLimit || locallyAddedIds.has(item.id)),
+    [visible, visibleLimit, locallyAddedIds]);
+  useEffect(() => {
+    const previous = beforeAdd.current;
+    const addedItem = previous ? items.filter((item) => !previous.ids.has(item.id) &&
+      item.title === previous.title && item.currency === previous.currency).at(-1) : undefined;
+    const newItems = addedItem ? [addedItem] : [];
+    if (previous && newItems.length) beforeAdd.current = null;
+    setLocallyAddedIds((current) => {
+      const existing = new Set(items.map((item) => item.id));
+      const next = new Set([...current].filter((id) => existing.has(id)));
+      for (const item of newItems) next.add(item.id);
+      return next.size === current.size && [...next].every((id) => current.has(id)) ? current : next;
+    });
+  }, [items]);
 
   function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -158,17 +191,23 @@ export default function ShoppingList({
       inputRef.current?.focus();
       return;
     }
+    beforeAdd.current = { ids: new Set(items.map((item) => item.id)), title: title.trim(), currency };
     if (!onAdd(title.trim(), currency)) {
+      beforeAdd.current = null;
       setError("save");
       return;
     }
     setTitle("");
     setError(null);
+    if (filter !== "all") {
+      setVisibleLimit(INITIAL_ROWS);
+      setLocallyAddedIds(new Set());
+    }
     setFilter("all");
     inputRef.current?.focus();
   }
 
-  function confirm(id: string, purchase: ShoppingPurchaseConfirmation) {
+  const confirm = useCallback((id: string, purchase: ShoppingPurchaseConfirmation) => {
     const rows = Array.from(listRef.current?.children ?? []);
     const index = rows.findIndex((row) => (row as HTMLElement).dataset.shoppingItem === id);
     const next = rows[index + 1] ?? rows[index - 1];
@@ -178,7 +217,7 @@ export default function ShoppingList({
       (target ?? inputRef.current)?.focus();
     });
     return true;
-  }
+  }, [onConfirm]);
 
   return (
     <section className="shopping-page" aria-labelledby={`${addId}-heading`}>
@@ -215,19 +254,25 @@ export default function ShoppingList({
         <div className="shopping-summary">
           <div className="shopping-counts">
             <span><span className="shopping-count-dot" /> {text.pending} <strong>{pendingCount}</strong></span>
-            <span><CheckCheck size={14} aria-hidden="true" /> {text.purchased} <strong>{purchased.length}</strong></span>
+            <span><CheckCheck size={14} aria-hidden="true" /> {text.purchased} <strong>{purchasedCount}</strong></span>
           </div>
           <span className="shopping-auto"><Check size={12} aria-hidden="true" /> {text.auto}</span>
         </div>
 
         {items.length > 0 && <div className="shopping-filters" role="group" aria-label={text.filters}>
           {(["all", "pending", "purchased"] as const).map((value) => <button
-            className="shopping-filter" key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}
+            className="shopping-filter" key={value} type="button" aria-pressed={filter === value} onClick={() => {
+              if (filter !== value) {
+                setFilter(value);
+                setVisibleLimit(INITIAL_ROWS);
+                setLocallyAddedIds(new Set());
+              }
+            }}
           >{text[value]}</button>)}
         </div>}
 
         {visible.length ? <ul className="shopping-items" aria-label={text.list} ref={listRef}>
-          {visible.map((item) => <ShoppingRow
+          {shown.map((item) => <ShoppingRow
             key={item.id}
             item={item}
             transaction={item.transactionId ? transactionMap.get(item.transactionId) : undefined}
@@ -244,6 +289,13 @@ export default function ShoppingList({
           <p>{items.length ? (filter === "pending" ? text.emptyPending : text.emptyPurchased) : text.emptyDescription}</p>
         </div>}
 
+        {shown.length < visible.length && <div className="shopping-more">
+          <span role="status">{text.shown} {shown.length} {text.of} {visible.length}</span>
+          <button className="button button-secondary" type="button" onClick={() => setVisibleLimit((limit) => limit + INITIAL_ROWS)}>
+            {text.showMore} · {Math.min(INITIAL_ROWS, visible.length - shown.length)}
+          </button>
+        </div>}
+
         {totals.length > 0 && <div className="shopping-totals" aria-label={text.totals}>
           <span>{text.totals}</span>
           <div>{totals.map(({ currency: code, amount }) => <strong key={code}>{formatMoney(amount, code, language)} <small>{code}</small></strong>)}</div>
@@ -254,7 +306,7 @@ export default function ShoppingList({
   );
 }
 
-function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onRemove, onConfirm, registerFlush }: {
+const ShoppingRow = memo(function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onRemove, onConfirm, registerFlush }: {
   item: ShoppingItem;
   transaction?: Transaction;
   language: Language;
@@ -589,4 +641,4 @@ function ShoppingRow({ item, transaction, language, onPriceChange, onUpdate, onR
       {priceError && <p className="shopping-row-error shopping-price-error" id={`${id}-price-error`} role="alert">{priceError === "invalid" ? text.priceError : text.saveError}</p>}
     </li>
   );
-}
+});

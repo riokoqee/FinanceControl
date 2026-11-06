@@ -47,10 +47,12 @@ async function tab(context, route = 'shopping', pauseClock = true) {
   page.setDefaultTimeout(10_000);
   page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
   await page.clock.install();
+  await page.clock.resume();
   const url = new URL(baseUrl);
   url.hash = route;
   await page.goto(url.href);
   await page.locator('h1').first().waitFor();
+  await page.locator({ overview: '.overview-stats', tracker: '.tracker-panel', shopping: '.shopping-add-form', profile: '.profile-form' }[route]).waitFor();
   await page.evaluate(() => document.fonts.ready);
   // Pause after loading so 599/600 ms checks do not include real action time.
   if (pauseClock) await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
@@ -90,7 +92,9 @@ const price = (page) => page.locator('.shopping-price-input').first();
 const currency = (page) => page.locator('.shopping-currency').first();
 const blur = (page) => page.locator('h1').first().click();
 async function navigate(page, route) {
+  await page.clock.resume();
   await page.locator(`a[href="#${route}"]:visible`).first().click();
+  await page.locator({ overview: '.overview-stats', tracker: '.tracker-panel', shopping: '.shopping-add-form', profile: '.profile-form' }[route]).waitFor();
   assert.equal(new URL(page.url()).hash, `#${route}`);
 }
 async function assertAmount(page, amount) {
@@ -145,6 +149,8 @@ try {
 
   await check('stale manual title edit preserves remote amount and purchase details', () => withSeed(seed(), async (a, context) => {
     const b = await tab(context, 'tracker');
+    await a.clock.resume();
+    await b.clock.resume();
     await a.locator('.row-actions button').first().click();
     await a.locator('.amount-input').waitFor();
     await b.locator('.transaction-open').first().click();
@@ -244,10 +250,11 @@ try {
   }));
 
   await check('keyboard detail close and notification expiry preserve row focus', () => withSeed(seed(), async (page) => {
+    await page.clock.resume();
     const row = page.locator('.transaction-open').first();
     await row.focus();
     await row.press('Enter');
-    await page.getByRole('dialog').waitFor();
+    await page.locator('.add-item-form').waitFor();
     await page.clock.runFor(32);
     await page.keyboard.press('Escape');
     await until(async () => assert.equal(await row.evaluate((element) => element === document.activeElement), true));

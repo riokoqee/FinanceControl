@@ -9,7 +9,7 @@
 
 /* BeliLog — a quiet captain's ledger, in the colors of the Grand Line. */
 :root {
-  --font: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font: 'Manrope Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-family: var(--font);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -1620,3 +1620,5 @@ html[data-theme='dark'] .activity-day.activity-selected { outline-color: var(--g
   .recent-panel .transaction-open .transaction-name { max-width: 99px; }
   .theme-option { font-size: 11px; }
 }
+
+.loading-state { padding: 28px 20px; color: var(--muted); font-size: 13px; line-height: 1.8; text-align: center; }

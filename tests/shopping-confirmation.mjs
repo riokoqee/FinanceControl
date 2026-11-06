@@ -49,10 +49,12 @@ async function open(context, route = 'shopping', pauseClock = true) {
   page.setDefaultTimeout(10_000);
   page.on('pageerror', (error) => errors.push(error.stack ?? error.message));
   await page.clock.install();
+  await page.clock.resume();
   const url = new URL(baseUrl);
   url.hash = route;
   await page.goto(url.href);
   await page.locator('h1').first().waitFor();
+  await page.locator({ overview: '.overview-stats', tracker: '.tracker-panel', shopping: '.shopping-add-form', profile: '.profile-form' }[route]).waitFor();
   await page.evaluate(() => document.fonts.ready);
   if (pauseClock) await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
   return page;
@@ -139,12 +141,14 @@ try {
     await page.clock.fastForward(2_000);
     await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
     assert.deepEqual(await read(page), saved);
+    await page.clock.resume();
     await page.reload();
-    await page.locator('h1').first().waitFor();
+    await page.locator('.shopping-add-form').waitFor();
     assert.equal(await row(page).count(), 0);
     assert.equal(await row(page, 'milk').count(), 1);
     assert.deepEqual(await read(page), saved);
     await page.locator('a[href="#tracker"]:visible').first().click();
+    await page.locator('.transaction-open').waitFor();
     assert.equal(await page.locator('.transaction-open').count(), 1);
     assert.ok((await page.locator('.transaction-open').innerText()).includes('Bread'));
     assert.equal((await read(page)).transactions[0].id, saved.transactions[0].id);

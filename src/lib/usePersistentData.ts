@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppData } from './finance';
 import { STORAGE_KEY } from './finance';
-import { mergeAppData, readStoredData, writeStoredData } from './storage';
+import { commitStoredData, readStoredData } from './storage';
 
 type Change = AppData | ((current: AppData) => AppData);
 
@@ -17,10 +17,7 @@ export function usePersistentData() {
     try {
       const base = current.current;
       const desired = typeof change === 'function' ? change(base) : change;
-      if (desired === base && !replaceCorrupt) return base;
-      const stored = readStoredData();
-      const next = replaceCorrupt ? desired : mergeAppData(base, stored.data, desired);
-      writeStoredData(next, undefined, { replaceCorrupt });
+      const next = commitStoredData(base, desired, undefined, { replaceCorrupt });
       // Event handlers can flush several rows before React renders.
       current.current = next;
       renderData(next);
@@ -37,7 +34,7 @@ export function usePersistentData() {
   useEffect(() => {
     const sync = (event: StorageEvent) => {
       if (event.key !== STORAGE_KEY && event.key !== null) return;
-      const incoming = readStoredData();
+      const incoming = readStoredData(undefined, current.current);
       setStatus(incoming.status);
       if (incoming.status === 'ready' || incoming.status === 'empty') {
         current.current = incoming.data;

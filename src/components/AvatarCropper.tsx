@@ -120,6 +120,7 @@ export default function AvatarCropper({
     x: number;
     y: number;
     offset: AvatarOffset;
+    ratio: number;
   } | null>(null);
 
   useEffect(() => {
@@ -219,6 +220,7 @@ export default function AvatarCropper({
       x: event.clientX,
       y: event.clientY,
       offset: geometry!.offset,
+      ratio: AVATAR_VIEWPORT / event.currentTarget.getBoundingClientRect().width,
     };
     setDragging(true);
   }
@@ -226,12 +228,10 @@ export default function AvatarCropper({
   function dragPhoto(event: PointerEvent<HTMLDivElement>) {
     const initial = drag.current;
     if (!initial || initial.pointer !== event.pointerId) return;
-    const ratio =
-      AVATAR_VIEWPORT / event.currentTarget.getBoundingClientRect().width;
     setOffset(
       clampOffset({
-        x: initial.offset.x + (event.clientX - initial.x) * ratio,
-        y: initial.offset.y + (event.clientY - initial.y) * ratio,
+        x: initial.offset.x + (event.clientX - initial.x) * initial.ratio,
+        y: initial.offset.y + (event.clientY - initial.y) * initial.ratio,
       }),
     );
   }

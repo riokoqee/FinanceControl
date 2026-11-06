@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   CalendarDays,
@@ -15,6 +15,8 @@ import { CATEGORIES, formatMoney, getItemTotal } from "../lib/finance";
 import type { Language, Transaction, TransactionItem } from "../lib/finance";
 import { translate } from "../lib/i18n";
 import { parseMoney } from "../lib/storage";
+
+const EMPTY_ITEMS: TransactionItem[] = [];
 
 const makeId = () =>
   globalThis.crypto?.randomUUID?.() ??
@@ -38,12 +40,13 @@ export default function EntryDetails({
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
-  const items = transaction.items ?? [];
-  const itemTotal = getItemTotal(transaction);
+  const items = transaction.items ?? EMPTY_ITEMS;
+  const itemTotal = useMemo(() => getItemTotal(transaction), [transaction]);
   const remaining = Math.round((transaction.amount - itemTotal) * 100) / 100;
   const money = (value: number) =>
     formatMoney(value, transaction.currency, language);
-  function updateItems(next: TransactionItem[]) {
+  const updateItems = useCallback((next: TransactionItem[]) => {
+    const tr = (text: string) => translate(language, text);
     const nextTotal = getItemTotal({ items: next });
     if (Math.round(nextTotal * 100) > Math.round(transaction.amount * 100)) {
       setError(tr("Сумма покупок не может превышать общую сумму записи."));
@@ -55,7 +58,11 @@ export default function EntryDetails({
     }
     setError("");
     return true;
-  }
+  }, [transaction, onChange, language]);
+  const saveItem = useCallback((next: TransactionItem) =>
+    updateItems(items.map((item) => item.id === next.id ? next : item)), [items, updateItems]);
+  const deleteItem = useCallback((id: string) =>
+    updateItems(items.filter((item) => item.id !== id)), [items, updateItems]);
   function addItem(event: FormEvent) {
     event.preventDefault();
     const numeric = parseMoney(amount);
@@ -132,12 +139,8 @@ export default function EntryDetails({
               item={item}
               language={language}
               currency={transaction.currency}
-              onSave={(next) =>
-                updateItems(items.map((i) => (i.id === item.id ? next : i)))
-              }
-              onDelete={() =>
-                updateItems(items.filter((i) => i.id !== item.id))
-              }
+              onSave={saveItem}
+              onDelete={deleteItem}
             />
           ))}
         </ul>
@@ -237,7 +240,7 @@ export default function EntryDetails({
     </div>
   );
 }
-function ItemRow({
+const ItemRow = memo(function ItemRow({
   item,
   language,
   currency,
@@ -248,7 +251,7 @@ function ItemRow({
   language: Language;
   currency: Transaction["currency"];
   onSave: (next: TransactionItem) => boolean;
-  onDelete: () => void;
+  onDelete: (id: string) => void;
 }) {
   const tr = (text: string) => translate(language, text);
   const [editing, setEditing] = useState(false);
@@ -352,7 +355,7 @@ function ItemRow({
           <button
             type="button"
             className="icon-button delete-action"
-            onClick={onDelete}
+            onClick={() => onDelete(item.id)}
             aria-label={`${tr("Удалить покупку")}: ${item.title}`}
             title={tr("Удалить покупку")}
           >
@@ -362,4 +365,4 @@ function ItemRow({
       )}
     </li>
   );
-}
+});

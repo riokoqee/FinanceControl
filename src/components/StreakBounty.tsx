@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { ArrowUpRight, CheckCircle2, Crown, Flame, Plus, Skull, Star, Trophy } from "lucide-react";
 import type { Language, Profile, Transaction } from "../lib/finance";
-import { todayString } from "../lib/finance";
-import { BERRIES_PER_DAY, getStreakStats } from "../lib/streak";
+import { BERRIES_PER_DAY } from "../lib/streak";
+import { useStreakStats } from "../lib/useStreakStats";
+import { dayLabel } from "./StreakBadge";
+export { useStreakStats } from "../lib/useStreakStats";
+export { default as StreakBadge } from "./StreakBadge";
 import { getPirateProgress } from "../lib/pirateRanks";
 import type { StreakIncrease } from "../lib/pirateRanks";
 import "./StreakBounty.css";
@@ -28,9 +31,9 @@ const copy = {
     profile: "ДОСЬЕ КАПИТАНА",
     emptyTitle: "Ваша легенда начинается здесь",
     emptyDescription:
-      "Добавляйте хотя бы одну запись в день: серия будет расти, а вместе с ней — награда за вашу голову.",
+      "Одна запись в день — серия растёт, награда повышается.",
     description:
-      "Каждая запись приближает к порядку в финансах. Каждый новый день в серии повышает вашу награду.",
+      "Каждый день серии — ещё 500 000 берри к награде.",
     recorded: "Сегодня запись уже в журнале",
     waiting: "Добавьте запись сегодня, чтобы сохранить серию",
     begin: "Начать серию",
@@ -55,9 +58,9 @@ const copy = {
     profile: "CAPTAIN’S DOSSIER",
     emptyTitle: "Your legend starts here",
     emptyDescription:
-      "Add at least one record each day to grow your streak and the bounty on your head.",
+      "One record a day grows your streak and bounty.",
     description:
-      "Each record brings your finances into focus. Each new day in your streak raises your bounty.",
+      "Each streak day adds 500,000 berries to your bounty.",
     recorded: "Today’s record is in the log",
     waiting: "Add a record today to keep your streak",
     begin: "Start your streak",
@@ -78,47 +81,6 @@ const copy = {
     legend: "Legend of the Seas achieved",
   },
 };
-
-function dayLabel(count: number, language: Language): string {
-  if (language === "en") return `${count} ${count === 1 ? "day" : "days"}`;
-  const plural = new Intl.PluralRules("ru").select(count);
-  return `${count} ${plural === "one" ? "день" : plural === "few" ? "дня" : "дней"}`;
-}
-
-/** Refresh at midnight or after returning to a tab that was asleep overnight. */
-function useLocalCalendarDay(): string {
-  const [day, setDay] = useState(() => todayString());
-  useEffect(() => {
-    let timeout: ReturnType<typeof setTimeout>;
-    const refresh = () => {
-      setDay(todayString());
-      clearTimeout(timeout);
-      const nextMidnight = new Date();
-      nextMidnight.setHours(24, 0, 0, 50);
-      timeout = setTimeout(
-        refresh,
-        Math.max(1, nextMidnight.getTime() - Date.now()),
-      );
-    };
-    refresh();
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      clearTimeout(timeout);
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, []);
-  return day;
-}
-
-export function useStreakStats(transactions: readonly Transaction[]) {
-  const day = useLocalCalendarDay();
-  return useMemo(
-    () => getStreakStats(transactions, new Date(`${day}T12:00:00`)),
-    [transactions, day],
-  );
-}
 
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
@@ -156,39 +118,22 @@ function useBountyAmount(bounty: number, celebration: BountyCelebration | null) 
   return animation?.id === celebration.id ? animation.amount : celebration.fromBounty;
 }
 
-export function StreakBadge({
-  transactions,
-  language,
-  onClick,
-}: {
-  transactions: Transaction[];
+const berryFormatters = {
+  ru: new Intl.NumberFormat("ru-RU"),
+  en: new Intl.NumberFormat("en-US"),
+};
+
+/** Only this number rerenders during the reward animation. */
+function AnimatedBountyAmount({ bounty, celebration, language }: {
+  bounty: number;
+  celebration: BountyCelebration | null;
   language: Language;
-  onClick?: () => void;
 }) {
-  const stats = useStreakStats(transactions);
-  const label =
-    language === "en"
-      ? `Recording streak: ${dayLabel(stats.current, language)}. ${stats.activeToday ? "Recorded today." : "Add a record today."}`
-      : `Серия записей: ${dayLabel(stats.current, language)}. ${stats.activeToday ? "Сегодня запись уже добавлена." : "Добавьте запись сегодня."}`;
-  return (
-    <button
-      type="button"
-      className={`streak-nav-badge ${stats.current > 0 ? "streak-nav-badge--active" : ""}`}
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      data-streak={stats.current}
-    >
-      <Flame size={15} aria-hidden="true" />
-      <span>{dayLabel(stats.current, language)}</span>
-      {stats.activeToday && (
-        <span className="streak-nav-badge-dot" aria-hidden="true" />
-      )}
-    </button>
-  );
+  const amount = useBountyAmount(bounty, celebration);
+  return <strong aria-hidden="true">{berryFormatters[language].format(amount)}</strong>;
 }
 
-export default function StreakBounty({
+export default memo(function StreakBounty({
   transactions,
   profile,
   language,
@@ -199,11 +144,10 @@ export default function StreakBounty({
   const stats = useStreakStats(transactions);
   const progression = getPirateProgress(stats.current);
   const activeCelebration = celebration?.toDays === stats.current && stats.activeToday ? celebration : null;
-  const displayedBounty = useBountyAmount(stats.bounty, activeCelebration);
   const t = copy[language];
   const hasStreak = stats.current > 0;
   const formatBerries = (amount: number) =>
-    new Intl.NumberFormat(language === "en" ? "en-US" : "ru-RU").format(amount);
+    berryFormatters[language].format(amount);
   const currentLabel =
     language === "en"
       ? `${dayLabel(stats.current, language)} in a row`
@@ -353,7 +297,7 @@ export default function StreakBounty({
               <span className="bounty-berry" aria-hidden="true">
                 B
               </span>
-              <strong aria-hidden="true">{formatBerries(displayedBounty)}</strong>
+              <AnimatedBountyAmount bounty={stats.bounty} celebration={activeCelebration} language={language} />
             </div>
             <div className="bounty-poster-footer">
               <span>MARINE</span>
@@ -377,4 +321,4 @@ export default function StreakBounty({
       )}
     </section>
   );
-}
+});

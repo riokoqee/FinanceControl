@@ -1,7 +1,8 @@
-import { useId, useMemo, useState } from "react";
-import { convertAmount, formatMoney, todayString } from "../lib/finance";
+import { memo, useId, useMemo, useState } from "react";
+import { convertAmount, formatMoney } from "../lib/finance";
 import type { Currency, Language, Transaction } from "../lib/finance";
 import { translate } from "../lib/i18n";
+import { useLocalCalendarDay } from "../lib/useStreakStats";
 
 export interface ExpenseChartProps {
   transactions: Transaction[];
@@ -11,7 +12,7 @@ export interface ExpenseChartProps {
   language: Language;
 }
 
-export default function ExpenseChart({
+export default memo(function ExpenseChart({
   transactions,
   month,
   range,
@@ -21,7 +22,8 @@ export default function ExpenseChart({
   const tr = (text: string) => translate(language, text);
   const locale = language === "en" ? "en-US" : "ru-RU";
   const days = new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate();
-  const end = month === todayString().slice(0, 7) ? new Date().getDate() : days;
+  const today = useLocalCalendarDay();
+  const end = month === today.slice(0, 7) ? Number(today.slice(8)) : days;
   const first = range === "week" ? Math.max(1, end - 6) : 1;
   const last = range === "week" ? end : days;
   const values = useMemo(() => {
@@ -29,12 +31,14 @@ export default function ExpenseChart({
     for (const transaction of transactions) {
       totals.set(transaction.date, (totals.get(transaction.date) ?? 0) + convertAmount(transaction.amount, transaction.currency, currency));
     }
+    const formatter = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" });
     return Array.from({ length: last - first + 1 }, (_, index) => {
       const day = first + index;
       const date = `${month}-${String(day).padStart(2, "0")}`;
-      return { day, date, total: totals.get(date) ?? 0 };
+      const total = totals.get(date) ?? 0;
+      return { day, date, total, label: formatter.format(new Date(`${date}T12:00:00`)), money: formatMoney(total, currency, language) };
     });
-  }, [transactions, currency, month, first, last]);
+  }, [transactions, currency, month, first, last, locale, language]);
   const selectionKey = `${month}:${range}`;
   const [selection, setSelection] = useState({ key: selectionKey, index: end - first });
   const [hover, setHover] = useState<{ key: string; index: number } | null>(null);
@@ -43,7 +47,6 @@ export default function ExpenseChart({
   const activeValue = values[active];
   const hintId = useId();
   const detailId = useId();
-  const dateLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(locale, { day: "numeric", month: "long" });
   const selectDay = (index: number) => {
     setHover(null);
     setSelection({ key: selectionKey, index: Math.max(0, Math.min(values.length - 1, index)) });
@@ -51,13 +54,14 @@ export default function ExpenseChart({
   const maximum = Math.max(100, ...values.map((value) => value.total)) * 1.2;
   const width = 680, height = 214, bottom = 188, left = 52, right = 668, top = 12;
   const step = (right - left) / values.length;
-  const monthLabel = new Date(`${month}-01T12:00:00`).toLocaleDateString(locale, { month: "long", year: "numeric" }).replace(" г.", "");
+  const monthLabel = useMemo(() => new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" })
+    .format(new Date(`${month}-01T12:00:00`)).replace(" г.", ""), [month, locale]);
 
   return (
     <div className="chart-container">
       <div className="chart-hover-info" id={detailId} role="status" aria-live="polite" aria-atomic="true">
-        <span>{dateLabel(activeValue.date)}</span>
-        <strong>{formatMoney(activeValue.total, currency, language)}</strong>
+        <span>{activeValue.label}</span>
+        <strong>{activeValue.money}</strong>
       </div>
       <p id={hintId} className="sr-only">
         {language === "en"
@@ -115,7 +119,7 @@ export default function ExpenseChart({
                 fill={active === index ? "#A9493B" : value.total ? "#C35D4C" : "var(--chart-empty)"}
                 opacity={active !== index ? 0.5 : 1}
               >
-                <title>{dateLabel(value.date)}: {formatMoney(value.total, currency, language)}</title>
+                <title>{value.label}: {value.money}</title>
               </rect>
               <rect x={left + index * step} y={top} width={step} height={bottom - top} fill="transparent" />
               {(range === "week" || index === 0 || index === values.length - 1 || value.day % 5 === 0) && (
@@ -132,11 +136,11 @@ export default function ExpenseChart({
         <select value={selected} onChange={(event) => selectDay(Number(event.target.value))}>
           {values.map((value, index) => (
             <option key={value.date} value={index}>
-              {dateLabel(value.date)} — {formatMoney(value.total, currency, language)}
+              {value.label} — {value.money}
             </option>
           ))}
         </select>
       </label>
     </div>
   );
-}
+});

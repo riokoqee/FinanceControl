@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Car,
   ChevronLeft,
@@ -62,9 +62,11 @@ function CategoryIcon({ category }: { category: CategoryId }) {
   );
 }
 
+const russianPlural = new Intl.PluralRules("ru");
+
 function itemLabel(count: number, language: Language) {
   if (language === "en") return count === 1 ? "item" : "items";
-  const form = new Intl.PluralRules("ru").select(count);
+  const form = russianPlural.select(count);
   return form === "one" ? "покупка" : form === "few" ? "покупки" : "покупок";
 }
 
@@ -80,7 +82,7 @@ export default function TransactionTable({
 }: TransactionTableProps) {
   const tr = (text: string) => translate(language, text);
   const size = Math.max(1, Math.floor(pageSize) || 50);
-  const filterKey = paginationKey ?? items.map((item) => item.id).join("\u0000");
+  const filterKey = useMemo(() => paginationKey ?? items.map((item) => item.id).join("\u0000"), [paginationKey, items]);
   const [position, setPosition] = useState({ key: filterKey, page: 1 });
   const pages = compact ? 1 : Math.max(1, Math.ceil(items.length / size));
   const page = Math.min(position.key === filterKey ? position.page : 1, pages);

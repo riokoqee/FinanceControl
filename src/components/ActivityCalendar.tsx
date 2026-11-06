@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import {
   CalendarDays,
@@ -14,8 +14,11 @@ import {
 } from "../lib/finance";
 import type { Language, Transaction } from "../lib/finance";
 import { translate } from "../lib/i18n";
+import { useLocalCalendarDay } from "../lib/useStreakStats";
 
-export default function ActivityCalendar({
+const russianPlural = new Intl.PluralRules("ru");
+
+export default memo(function ActivityCalendar({
   transactions,
   language,
 }: {
@@ -25,10 +28,11 @@ export default function ActivityCalendar({
   const tr = (text: string) => translate(language, text);
   const entryLabel = (count: number) => {
     if (language === "en") return count === 1 ? "record" : "records";
-    const form = new Intl.PluralRules("ru").select(count);
+    const form = russianPlural.select(count);
     return form === "one" ? "запись" : form === "few" ? "записи" : "записей";
   };
-  const thisYear = new Date().getFullYear();
+  const today = useLocalCalendarDay();
+  const thisYear = Number(today.slice(0, 4));
   const [year, setYear] = useState(thisYear);
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -48,7 +52,6 @@ export default function ActivityCalendar({
   const [focusedDay, setFocusedDay] = useState(todayString);
   const keyboardHintId = useId();
   const counts = useMemo(() => getActivityCounts(transactions), [transactions]);
-  const today = todayString();
   const locale = language === "en" ? "en-US" : "ru-RU";
   const firstEnabledDay = `${year}-01-01`;
   const lastEnabledDay = year === thisYear ? today : `${year}-12-31`;
@@ -92,48 +95,51 @@ export default function ActivityCalendar({
     button?.focus({ preventScroll: true });
     if (button) revealDay(button);
   };
-  const first = new Date(year, 0, 1, 12);
-  first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
-  const last = new Date(year, 11, 31, 12);
-  const weeks: {
-    date: string;
-    inYear: boolean;
-    count: number;
-    weekday: number;
-  }[][] = [];
-  const cursor = new Date(first);
-  while (cursor <= last) {
-    const week = [];
-    for (let day = 0; day < 7; day++) {
-      const date = todayString(cursor);
-      week.push({
-        date,
-        inYear: cursor.getFullYear() === year,
-        count: counts[date] ?? 0,
-        weekday: day,
-      });
-      cursor.setDate(cursor.getDate() + 1);
+  // Dates, labels and month positions do not change when keyboard focus moves.
+  const { weeks, monthLabels } = useMemo(() => {
+    const first = new Date(year, 0, 1, 12);
+    first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+    const last = new Date(year, 11, 31, 12);
+    const formatter = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" });
+    const weeks: { date: string; inYear: boolean; label: string }[][] = [];
+    const firstWeeks: number[] = [];
+    const cursor = new Date(first);
+    while (cursor <= last) {
+      const week = [];
+      for (let day = 0; day < 7; day++) {
+        const date = todayString(cursor);
+        const inYear = cursor.getFullYear() === year;
+        if (inYear && cursor.getDate() === 1) firstWeeks[cursor.getMonth()] = weeks.length;
+        week.push({ date, inYear, label: formatter.format(cursor) });
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      weeks.push(week);
     }
-    weeks.push(week);
-  }
-  const yearDays = weeks.flat().filter((d) => d.inYear && d.date <= today);
-  const activeDays = yearDays.filter((d) => d.count > 0).length;
-  const total = yearDays.reduce((sum, d) => sum + d.count, 0);
-  let streak = 0,
-    longest = 0;
-  yearDays.forEach((d) => {
-    streak = d.count > 0 ? streak + 1 : 0;
-    longest = Math.max(longest, streak);
-  });
-  const firstWeekForMonth = (month: number) =>
-    weeks.findIndex((w) =>
-      w.some(
-        (d) =>
-          d.inYear &&
-          Number(d.date.slice(5, 7)) === month &&
-          d.date.endsWith("-01"),
-      ),
+    const monthFormatter = new Intl.DateTimeFormat(locale, { month: "short" });
+    const monthLabels = Array.from({ length: 12 }, (_, month) => ({
+      column: firstWeeks[month] + 1,
+      label: monthFormatter.format(new Date(year, month, 1)).replace(".", ""),
+    }));
+    return { weeks, monthLabels };
+  }, [year, locale]);
+  const weekdayLabels = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(locale, { weekday: "short" });
+    return Array.from({ length: 7 }, (_, index) =>
+      [0, 2, 4].includes(index) ? formatter.format(new Date(2026, 9, 26 + index)) : "",
     );
+  }, [locale]);
+  const { activeDays, total, longest } = useMemo(() => {
+    let activeDays = 0, total = 0, streak = 0, longest = 0;
+    for (const week of weeks) for (const day of week) {
+      if (!day.inYear || day.date > today) continue;
+      const count = counts[day.date] ?? 0;
+      total += count;
+      if (count > 0) activeDays++;
+      streak = count > 0 ? streak + 1 : 0;
+      longest = Math.max(longest, streak);
+    }
+    return { activeDays, total, longest };
+  }, [weeks, counts, today]);
   const detailDay =
     selectedDay && selectedDay.startsWith(String(year))
       ? selectedDay
@@ -204,30 +210,15 @@ export default function ActivityCalendar({
               marginLeft: 30,
             }}
           >
-            {Array.from({ length: 12 }, (_, i) => (
-              <span
-                key={i}
-                style={{
-                  gridColumn: `${firstWeekForMonth(i + 1) + 1} / span 3`,
-                }}
-              >
-                {new Date(year, i, 1)
-                  .toLocaleDateString(locale, { month: "short" })
-                  .replace(".", "")}
+            {monthLabels.map((month, index) => (
+              <span key={index} style={{ gridColumn: `${month.column} / span 3` }}>
+                {month.label}
               </span>
             ))}
           </div>
           <div className="activity-body">
             <div className="activity-weekdays" aria-hidden="true">
-              {Array.from({ length: 7 }, (_, i) => (
-                <span key={i}>
-                  {[0, 2, 4].includes(i)
-                    ? new Date(2026, 9, 26 + i).toLocaleDateString(locale, {
-                        weekday: "short",
-                      })
-                    : ""}
-                </span>
-              ))}
+              {weekdayLabels.map((label, index) => <span key={index}>{label}</span>)}
             </div>
             <div
               className="activity-grid"
@@ -239,13 +230,14 @@ export default function ActivityCalendar({
                 <div className="activity-week" key={index}>
                   {week.map((d) => {
                     const future = d.date > today;
-                    const label = `${new Date(`${d.date}T12:00:00`).toLocaleDateString(locale, { day: "numeric", month: "long" })}: ${d.count} ${entryLabel(d.count)}`;
+                    const count = counts[d.date] ?? 0;
+                    const label = `${d.label}: ${count} ${entryLabel(count)}`;
                     return d.inYear ? (
                       <button
                         key={d.date}
                         type="button"
                         className={`activity-day ${d.date === today ? "activity-today" : ""} ${d.date === selectedDay ? "activity-selected" : ""}`}
-                        data-level={future ? 0 : getActivityLevel(d.count)}
+                        data-level={future ? 0 : getActivityLevel(count)}
                         data-future={future || undefined}
                         data-date={d.date}
                         tabIndex={!future && d.date === tabDay ? 0 : -1}
@@ -315,4 +307,4 @@ export default function ActivityCalendar({
       </p>
     </section>
   );
-}
+});

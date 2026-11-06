@@ -32,11 +32,15 @@ export function getStreakStats(
   now = new Date(),
 ): StreakStats {
   const today = todayString(now);
-  const days = new Set(
-    transactions
-      .map((transaction) => transaction.createdAt ?? transaction.date)
-      .filter((day) => isCalendarDay(day) && day <= today),
-  );
+  // Validate each distinct day once, rather than parsing the same date for every expense.
+  const days = new Set<string>();
+  const checkedDays = new Set<string>();
+  for (const transaction of transactions) {
+    const day = transaction.createdAt ?? transaction.date;
+    if (day > today || checkedDays.has(day)) continue;
+    checkedDays.add(day);
+    if (isCalendarDay(day)) days.add(day);
+  }
   const orderedDays = [...days].sort();
   const activeToday = days.has(today);
   let current = 0;

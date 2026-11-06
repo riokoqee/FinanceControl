@@ -105,7 +105,7 @@ export const DEFAULT_PROFILE: Readonly<Profile> = {
 
 export const MAX_AMOUNT = 1_000_000_000_000;
 export const MAX_TRANSACTIONS = 50_000;
-const MAX_BACKUP_LENGTH = 30_000_000;
+export const MAX_BACKUP_LENGTH = 30_000_000;
 const MAX_ITEMS = 200;
 const MAX_AVATAR_LENGTH = 500_000;
 const MAX_SHOPPING_ITEMS = 1_000;
@@ -159,19 +159,33 @@ export function getMonthTotal(
   );
 }
 
+const moneyFormatters = new Map<string, Intl.NumberFormat>();
+const dateFormatters = new Map<Language, Intl.DateTimeFormat>();
+
 export function formatMoney(amount: number, currency: Currency, language: Language = 'ru'): string {
-  return new Intl.NumberFormat(language === 'en' ? 'en-US' : 'ru-RU', {
+  const key = `${language}:${currency}`;
+  let formatter = moneyFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(language === 'en' ? 'en-US' : 'ru-RU', {
     style: 'currency',
     currency,
     currencyDisplay: 'narrowSymbol',
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(amount);
+    });
+    moneyFormatters.set(key, formatter);
+  }
+  return formatter.format(amount);
 }
 
 export function formatDate(date: string, language: Language = 'ru'): string {
   if (!isValidDate(date)) return date;
-  return new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'ru-RU', { day: 'numeric', month: 'short' }).format(
+  let formatter = dateFormatters.get(language);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'ru-RU', { day: 'numeric', month: 'short' });
+    dateFormatters.set(language, formatter);
+  }
+  return formatter.format(
     new Date(`${date}T12:00:00`),
   );
 }

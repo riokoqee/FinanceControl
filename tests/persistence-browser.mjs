@@ -16,6 +16,7 @@ async function open(context, route = 'tracker') {
   page.on('pageerror', (error) => { console.error(error); process.exitCode = 1; });
   await page.goto(`${url}#${route}`);
   await page.locator('h1').waitFor();
+  await page.locator({ overview: '.overview-stats', tracker: '.tracker-panel', shopping: '.shopping-add-form', profile: '.profile-form' }[route]).waitFor();
   return page;
 }
 async function test(name, fn, { raw = JSON.stringify(seed()), lastGood, memory = false, route = 'tracker' } = {}) {
@@ -122,8 +123,92 @@ try {
     await a.getByRole('button', { name: 'Load current profile', exact: true }).click();
     assert.equal(await nameA.inputValue(), 'Remote name');
     await nameA.fill('Resolved name');
+    await a.waitForFunction((key) => JSON.parse(localStorage.getItem(key)).profile.name === 'Resolved name', KEY);
     assert.equal((await read(a)).profile.name, 'Resolved name');
   }, { route: 'profile' });
+
+  await test('changing currency rejects a competing budget edit and retains the local draft', async (a, context) => {
+    const b = await open(context, 'profile');
+    const budgetA = a.locator('.profile-form input[type="number"]');
+    // An unfinished email keeps the budget draft pending without relying on a
+    // narrow debounce race between the two tabs.
+    await a.locator('.profile-form input[type="email"]').fill('unfinished@');
+    await budgetA.fill('150');
+    await b.locator('.profile-form input[required]').fill('Remote captain');
+    await b.locator('.profile-form input[type="number"]').fill('200');
+    await b.locator('.profile-form button[type="submit"]').click();
+    await a.waitForFunction(() => document.querySelector('.profile-form input[required]').value === 'Remote captain');
+    await a.locator('.profile-form select').first().selectOption('EUR');
+    assert.equal((await read(a)).profile.currency, 'USD');
+    assert.equal((await read(a)).profile.monthlyBudget, 200);
+    assert.equal(await budgetA.inputValue(), '150');
+    assert.equal(await a.locator('.profile-form input[type="email"]').inputValue(), 'unfinished@');
+    assert.equal(await a.locator('.profile-form select').first().inputValue(), 'USD');
+    await a.getByRole('button', { name: 'Load current profile', exact: true }).waitFor();
+  }, { route: 'profile' });
+
+  await test('instant theme and currency changes preserve an unfinished text draft without duplicate commits', async (page) => {
+    await page.evaluate((key) => {
+      window.__profileWrites = 0;
+      const set = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (name, value) {
+        if (name === key) window.__profileWrites++;
+        return set.call(this, name, value);
+      };
+    }, KEY);
+    await page.locator('.profile-form input[type="email"]').fill('unfinished@');
+    await page.locator('.profile-form input[required]').fill('Pending captain');
+    await page.getByRole('button', { name: 'Dark', exact: true }).click();
+    assert.equal((await read(page)).profile.theme, 'dark');
+    assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
+    await page.locator('.profile-form select').first().selectOption('EUR');
+    const saved = await read(page);
+    assert.equal(saved.profile.currency, 'EUR');
+    assert.equal(saved.profile.monthlyBudget, 92);
+    assert.equal(saved.profile.name, 'Audit');
+    assert.equal(saved.profile.email, '');
+    assert.equal(await page.locator('.profile-form input[required]').inputValue(), 'Pending captain');
+    assert.equal(await page.locator('.profile-form input[type="email"]').inputValue(), 'unfinished@');
+    await page.waitForTimeout(450);
+    assert.equal(await page.evaluate(() => window.__profileWrites), 2);
+    // Finishing the unrelated draft still saves against the original text baseline.
+    await page.locator('.profile-form input[type="email"]').fill('captain@example.com');
+    await page.locator('.profile-form button[type="submit"]').click();
+    assert.equal((await read(page)).profile.name, 'Pending captain');
+    assert.equal((await read(page)).profile.email, 'captain@example.com');
+    assert.equal((await read(page)).profile.currency, 'EUR');
+  }, { route: 'profile' });
+
+  await test('clicking the selected theme preserves a queued text autosave', async (page) => {
+    await page.locator('.profile-form input[required]').fill('Still saves automatically');
+    await page.getByRole('button', { name: 'Light', exact: true }).click();
+    await page.waitForFunction((key) => JSON.parse(localStorage.getItem(key)).profile.name === 'Still saves automatically', KEY);
+    assert.equal((await read(page)).profile.theme, 'light');
+  }, { route: 'profile' });
+
+  for (const replacement of ['import', 'demo', 'reset']) {
+    await test(`profile editing immediately after ${replacement} uses the replacement baseline`, async (page) => {
+      if (replacement === 'import') {
+        const incoming = seed();
+        incoming.profile = { ...incoming.profile, name: 'Imported captain', currency: 'EUR', monthlyBudget: 92, theme: 'dark' };
+        await page.locator('input[type="file"][accept*=".pdf"]').setInputFiles({
+          name: 'replacement.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(incoming)),
+        });
+        await page.getByRole('button', { name: 'Restore everything', exact: true }).click();
+      } else if (replacement === 'demo') {
+        await page.locator('.demo-card button').click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Load demo', exact: true }).click();
+      } else {
+        await page.locator('.data-danger-zone button').click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Delete all data', exact: true }).click();
+      }
+      const expected = `${replacement} edited captain`;
+      await page.locator('.profile-form input[required]').fill(expected);
+      await page.locator('.profile-form button[type="submit"]').click();
+      assert.equal((await read(page)).profile.name, expected);
+      assert.equal(await page.getByRole('button', { name: /^(Load current profile|Загрузить актуальный профиль)$/ }).count(), 0);
+    }, { route: 'profile' });
+  }
 
   const highBudget = seed(); highBudget.profile.monthlyBudget = 3_000_000_000;
   await test('currency conversion above budget limit is rejected before mutation', async (page) => {

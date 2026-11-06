@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_AMOUNT, MAX_TRANSACTIONS, STORAGE_KEY, createEmptyData, type AppData, type Transaction } from './finance';
+import { MAX_AMOUNT, MAX_BACKUP_LENGTH, MAX_TRANSACTIONS, STORAGE_KEY, createEmptyData, type AppData, type Transaction } from './finance';
 import {
   CORRUPT_KEY,
   LAST_GOOD_KEY,
   DataConflictError,
   StorageRecoveryError,
+  commitStoredData,
   mergeAppData,
+  mergeProfileDraft,
   mergeTransactionDraft,
   parseMoney,
   readStoredData,
@@ -28,6 +30,198 @@ function memoryStorage(initial: Record<string, string> = {}) {
   };
 }
 
+describe('single-commit persistence', () => {
+  it('keeps equal ledger and shopping arrays stable on a profile-only save', () => {
+    const base = { ...data(), shoppingList: [{ id: 'plan', title: 'Bread', currency: 'EUR' as const, createdAt: '2026-11-03' }] };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const desired = { ...base, profile: { ...base.profile, name: 'Captain' } };
+    const saved = commitStoredData(base, desired, storage);
+    expect(saved.profile.name).toBe('Captain');
+    expect(saved.transactions).toBe(base.transactions);
+    expect(saved.shoppingList).toBe(base.shoppingList);
+    expect(readStoredData(storage).data).toEqual(saved);
+    expect(base.profile.name).not.toBe('Captain');
+  });
+
+  it('keeps unchanged records stable when a storage event reads a remote profile change', () => {
+    const base = data();
+    const remote = { ...base, profile: { ...base.profile, language: 'en' as const } };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    const incoming = readStoredData(storage, base);
+    expect(incoming.data.profile.language).toBe('en');
+    expect(incoming.data.transactions).toBe(base.transactions);
+    expect(storage.writes).toEqual([]);
+  });
+
+  it('reuses equal records while saving changed records and canonicalizing inputs', () => {
+    const base = data();
+    base.transactions.push(expense({ id: 'unchanged' }));
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const desired = { ...base, transactions: [{ ...base.transactions[0], title: '  Market  ' }, base.transactions[1]] };
+    const saved = commitStoredData(base, desired, storage);
+    expect(saved.transactions).not.toBe(base.transactions);
+    expect(saved.transactions[0]).toMatchObject({ title: 'Market' });
+    expect(saved.transactions[0]).not.toBe(desired.transactions[0]);
+    expect(saved.transactions[1]).toBe(base.transactions[1]);
+    expect(desired.transactions[0].title).toBe('  Market  ');
+    expect(readStoredData(storage).data).toEqual(saved);
+  });
+
+  it('merges a newer persisted expense before saving a local profile change', () => {
+    const base = data();
+    const remote = copy(base);
+    remote.transactions[0].amount = 40;
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    const saved = commitStoredData(base, { ...base, profile: { ...base.profile, name: 'Captain' } }, storage);
+    expect(saved.profile.name).toBe('Captain');
+    expect(saved.transactions[0].amount).toBe(40);
+  });
+
+  it('retains merge ordering and legacy shopping shape on the fast path', () => {
+    const base = { ...data(), shoppingList: [{ id: 'plan', title: 'Bread', currency: 'EUR' as const, createdAt: '2026-11-03' }] };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const { shoppingList: _shopping, ...desired } = { ...base, transactions: [expense({ id: 'new' }), ...base.transactions] };
+    const saved = commitStoredData(base, desired, storage);
+    expect(saved).toEqual(mergeAppData(base, copy(base), desired));
+    expect(saved.transactions.map(({ id }) => id)).toEqual(['expense', 'new']);
+    expect(saved.shoppingList).toEqual([]);
+  });
+
+  it('rechecks the primary and merges an edit made while the candidate was prepared', () => {
+    const base = data();
+    const remote = copy(base);
+    remote.transactions[0].amount = 40;
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    let reads = 0;
+    const racing = { ...storage, getItem: (key: string) => {
+      if (key === STORAGE_KEY && ++reads === 2) storage.values.set(key, JSON.stringify(remote));
+      return storage.getItem(key);
+    } };
+    const desired = { ...base, transactions: [{ ...base.transactions[0], title: 'Market' }] };
+    const saved = commitStoredData(base, desired, racing);
+    expect(saved.transactions[0]).toMatchObject({ title: 'Market', amount: 40 });
+    expect(storage.writes.filter(([key]) => key === STORAGE_KEY)).toHaveLength(1);
+  });
+
+  it('does not overwrite a same-field conflict that appears just before the write', () => {
+    const base = data();
+    const remote = copy(base);
+    remote.transactions[0].title = 'Remote market';
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    let reads = 0;
+    const racing = { ...storage, getItem: (key: string) => {
+      if (key === STORAGE_KEY && ++reads === 2) storage.values.set(key, JSON.stringify(remote));
+      return storage.getItem(key);
+    } };
+    const desired = { ...base, transactions: [{ ...base.transactions[0], title: 'Local market' }] };
+    expect(() => commitStoredData(base, desired, racing)).toThrow(DataConflictError);
+    expect(storage.writes).toEqual([]);
+    expect(readStoredData(storage).data).toEqual(remote);
+  });
+
+  it('stops repeated racing writes instead of discarding another tab changes', () => {
+    const base = data();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    let reads = 0;
+    const racing = { ...storage, getItem: (key: string) => {
+      if (key === STORAGE_KEY) storage.values.set(key, JSON.stringify({ ...base, profile: { ...base.profile, monthlyBudget: ++reads } }));
+      return storage.getItem(key);
+    } };
+    expect(() => commitStoredData(base, { ...base, profile: { ...base.profile, name: 'Captain' } }, racing)).toThrow(DataConflictError);
+    expect(storage.writes).toEqual([]);
+  });
+
+  it('preserves corruption introduced immediately before a save', () => {
+    const base = data();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    let reads = 0;
+    const racing = { ...storage, getItem: (key: string) => {
+      if (key === STORAGE_KEY && ++reads === 2) storage.values.set(key, '{damaged');
+      return storage.getItem(key);
+    } };
+    expect(() => commitStoredData(base, { ...base, profile: { ...base.profile, name: 'Captain' } }, racing)).toThrow(StorageRecoveryError);
+    expect(storage.values.get(STORAGE_KEY)).toBe('{damaged');
+    expect(storage.writes).toEqual([]);
+  });
+
+  it('does not trust a previously validated object after its caller mutates it', () => {
+    const base = data();
+    const storage = memoryStorage();
+    const saved = commitStoredData(createEmptyData(), base, storage);
+    const raw = storage.values.get(STORAGE_KEY);
+    const writes = storage.writes.length;
+    saved.transactions[0].amount = 0;
+    expect(() => commitStoredData(saved, { ...saved, profile: { ...saved.profile, name: 'Captain' } }, storage)).toThrow();
+    expect(() => writeStoredData(saved, storage)).toThrow();
+    expect(storage.values.get(STORAGE_KEY)).toBe(raw);
+    expect(storage.writes).toHaveLength(writes);
+  });
+
+  it('does not reuse a primary validation after its raw string changes', () => {
+    const storage = memoryStorage();
+    writeStoredData(data(), storage);
+    storage.values.set(STORAGE_KEY, '{damaged');
+    const writes = storage.writes.length;
+    expect(() => writeStoredData(data(), storage)).toThrow(StorageRecoveryError);
+    expect(storage.values.get(STORAGE_KEY)).toBe('{damaged');
+    expect(storage.writes).toHaveLength(writes);
+  });
+
+  it('keeps corruption blocked and archives it only on explicit replacement', () => {
+    const storage = memoryStorage({ [STORAGE_KEY]: '{original' });
+    expect(() => commitStoredData(createEmptyData(), data(), storage)).toThrow(StorageRecoveryError);
+    expect(storage.writes).toEqual([]);
+    expect(commitStoredData(createEmptyData(), data(), storage, { replaceCorrupt: true })).toEqual(data());
+    expect(storage.values.get(CORRUPT_KEY)).toBe('{original');
+  });
+
+  it('reports a failed primary commit without exposing the candidate as saved', () => {
+    const base = data();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const blocked = { getItem: storage.getItem, setItem: () => { throw new Error('QuotaExceededError'); } };
+    expect(() => commitStoredData(base, { ...base, profile: { ...base.profile, name: 'Captain' } }, blocked)).toThrow('QuotaExceededError');
+    expect(readStoredData(storage).data).toEqual(base);
+  });
+
+  it('validates limits on the uncontended fast path', () => {
+    const base = data();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const invalid = { ...base, profile: { ...base.profile, monthlyBudget: MAX_AMOUNT + 1 } };
+    expect(() => commitStoredData(base, invalid, storage)).toThrow();
+    expect(storage.writes).toEqual([]);
+    expect(readStoredData(storage).data).toEqual(base);
+  });
+
+  it('rejects a valid object whose serialized form would exceed the readable backup limit', () => {
+    const base = createEmptyData();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const desired: AppData = {
+      ...base,
+      transactions: Array.from({ length: 15_000 }, (_, index) => expense({ id: `expense-${index}`, note: 'n'.repeat(2_000) })),
+    };
+    expect(JSON.stringify(desired).length).toBeGreaterThan(MAX_BACKUP_LENGTH);
+    expect(() => commitStoredData(base, desired, storage)).toThrow('слишком большой');
+    expect(() => writeStoredData(desired, storage)).toThrow('слишком большой');
+    expect(storage.writes).toEqual([]);
+    expect(readStoredData(storage).data).toEqual(base);
+  });
+});
+
+describe('profile-only editor merge', () => {
+  it('merges disjoint edits and preserves unrelated current settings', () => {
+    const base = data().profile;
+    expect(mergeProfileDraft(base, { ...base, language: 'en', theme: 'dark' }, { ...base, name: 'Captain' }))
+      .toMatchObject({ name: 'Captain', language: 'en', theme: 'dark' });
+    expect(base.name).not.toBe('Captain');
+  });
+
+  it('rejects same-field conflicts and invalid profiles', () => {
+    const base = data().profile;
+    expect(() => mergeProfileDraft(base, { ...base, name: 'Remote' }, { ...base, name: 'Local' })).toThrow(DataConflictError);
+    expect(() => mergeProfileDraft(base, base, { ...base, monthlyBudget: MAX_AMOUNT + 1 })).toThrow();
+    expect(() => mergeProfileDraft({ ...base, monthlyBudget: -1 }, base, base)).toThrow();
+  });
+});
 describe('recoverable local persistence', () => {
   it('reads an empty or valid store without writing anything', () => {
     const storage = memoryStorage();
