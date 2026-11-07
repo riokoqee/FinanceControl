@@ -1,22 +1,15 @@
 import { useMemo } from "react";
 import type { ReactNode } from "react";
-import {
-  ArrowRight,
-  CircleHelp,
-  Download,
-  Search,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import { CircleHelp, Download, Search, X } from "lucide-react";
 import {
   CATEGORIES,
   CURRENCIES,
   convertAmount,
   formatMoney,
+  RATE_LABEL,
 } from "../lib/finance";
 import type { Currency, Language, Transaction } from "../lib/finance";
 import { translate } from "../lib/i18n";
-import { plural } from "../lib/display";
 import TransactionTable from "../components/TransactionTable";
 interface TrackerPageProps {
   filtered: Transaction[];
@@ -90,24 +83,8 @@ export default function TrackerPage({
         </div>
         <div>
           <span>{tr("Количество записей")}</span>
-          <strong>
-            {filtered.length}
-            <small>
-              {" "}
-              {plural(
-                filtered.length,
-                tr("расход"),
-                tr("расхода"),
-                tr("расходов"),
-                language,
-              )}
-            </small>
-          </strong>
+          <strong>{filtered.length}</strong>
         </div>
-        <span className="tracker-summary-note">
-          <ShieldCheck size={18} />
-          {tr("Каждая запись — шаг к ясности")}
-        </span>
       </div>
       <section
         className="panel tracker-panel"
@@ -168,9 +145,6 @@ export default function TrackerPage({
           </select>
         </div>
         <div className="filter-summary">
-          <span>
-            {tr("Найдено записей:")} <strong>{filtered.length}</strong>
-          </span>
           <label className="checkbox-label">
             <input
               type="checkbox"
@@ -193,12 +167,14 @@ export default function TrackerPage({
           emptyState
         )}
         <div className="table-footer">
-          <ShieldCheck size={14} />
-          <span>
-            {storageOk
-              ? tr("Все изменения сохраняются автоматически")
-              : tr("Хранилище недоступно. Скачайте резервную копию.")}
-          </span>
+          {!storageOk && (
+            <>
+              <CircleHelp size={14} />
+              <span>
+                {tr("Хранилище недоступно. Скачайте резервную копию.")}
+              </span>
+            </>
+          )}
           <button className="inline-link" onClick={onExport} disabled={pdfBusy}>
             <Download size={14} />
             {tr("Создать PDF")}
@@ -206,11 +182,13 @@ export default function TrackerPage({
         </div>
       </section>
       <p className="workspace-footnote">
-        <CircleHelp size={13} />
-        {tr("Суммы покупок сохраняются в исходной валюте. Итог в")} {currency}{" "}
-        {tr("— по условному курсу.")}
-        <button className="inline-link" onClick={() => onProfile()}>
-          {tr("О курсах")} <ArrowRight size={13} />
+        <button
+          className="inline-link"
+          title={tr(RATE_LABEL)}
+          onClick={onProfile}
+        >
+          <CircleHelp size={13} />
+          {tr("Условный курс")}
         </button>
       </p>
     </>

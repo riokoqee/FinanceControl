@@ -27,55 +27,41 @@ interface StreakBountyProps {
 
 const copy = {
   ru: {
-    overview: "НАВСТРЕЧУ НОВОЙ ЛЕГЕНДЕ",
-    profile: "ДОСЬЕ КАПИТАНА",
-    emptyTitle: "Ваша легенда начинается здесь",
-    emptyDescription:
-      "Одна запись в день — серия растёт, награда повышается.",
-    description:
-      "Каждый день серии — ещё 500 000 берри к награде.",
-    recorded: "Сегодня запись уже в журнале",
-    waiting: "Добавьте запись сегодня, чтобы сохранить серию",
+    emptyTitle: "Начните свою легенду",
+    emptyDescription: "Записывайте расходы каждый день.",
+    recorded: "Сегодня записано",
+    waiting: "Добавьте запись сегодня",
     begin: "Начать серию",
     continue: "Продолжить серию",
     add: "Добавить запись",
     best: "Лучшая серия",
-    daily: "За день серии",
+    daily: "За день",
     berries: "берри",
     nextToday: "После записи сегодня",
     nextTomorrow: "После записи завтра",
     reward: "Награда за голову",
     portrait: "Аватар капитана",
-    fictional: "Игровая награда за вашу привычку",
-    emptyStatus: "0 дней подряд",
-    noPoster: "Первый день — первый постер WANTED",
+    noPoster: "Первая запись — постер WANTED",
     progression: "Прогресс пиратского ранга",
     promoted: "НОВЫЙ ПИРАТСКИЙ РАНГ",
     legend: "Легенда морей достигнута",
   },
   en: {
-    overview: "YOUR NEXT GREAT ADVENTURE",
-    profile: "CAPTAIN’S DOSSIER",
     emptyTitle: "Your legend starts here",
-    emptyDescription:
-      "One record a day grows your streak and bounty.",
-    description:
-      "Each streak day adds 500,000 berries to your bounty.",
-    recorded: "Today’s record is in the log",
-    waiting: "Add a record today to keep your streak",
+    emptyDescription: "Log your expenses every day.",
+    recorded: "Logged today",
+    waiting: "Add a record today",
     begin: "Start your streak",
     continue: "Keep your streak",
     add: "Add a record",
     best: "Best streak",
-    daily: "Per streak day",
+    daily: "Per day",
     berries: "berries",
     nextToday: "After today’s record",
     nextTomorrow: "After tomorrow’s record",
     reward: "Bounty on your head",
     portrait: "Captain’s avatar",
-    fictional: "An in-world reward for your habit",
-    emptyStatus: "0 days in a row",
-    noPoster: "First day, first WANTED poster",
+    noPoster: "First record, first WANTED poster",
     progression: "Pirate rank progress",
     promoted: "PIRATE RANK UNLOCKED",
     legend: "Legend of the Seas achieved",
@@ -155,7 +141,7 @@ export default memo(function StreakBounty({
   const progressLabel = progression.nextRank
     ? language === "en"
       ? `${dayLabel(progression.daysRemaining, language)} until ${progression.nextRank.name[language]}`
-      : `Ещё ${dayLabel(progression.daysRemaining, language)} до ранга «${progression.nextRank.name[language]}»`
+      : `Ещё ${dayLabel(progression.daysRemaining, language)} до «${progression.nextRank.name[language]}»`
     : t.legend;
   const RankSeal = progression.rank?.id === "legend" ? Crown : progression.rank?.id === "supernova" ? Star : Skull;
 
@@ -170,10 +156,6 @@ export default memo(function StreakBounty({
       data-rank={progression.rank?.id ?? "none"}
     >
       <div className="streak-bounty-copy">
-        <div className="streak-bounty-eyebrow">
-          <Flame size={14} aria-hidden="true" />
-          {t[variant]}
-        </div>
         <h2 className="streak-bounty-title">
           {hasStreak ? currentLabel : t.emptyTitle}
           {hasStreak && (
@@ -182,9 +164,9 @@ export default memo(function StreakBounty({
             </span>
           )}
         </h2>
-        <p className="streak-bounty-description">
-          {hasStreak ? t.description : t.emptyDescription}
-        </p>
+        {!hasStreak && (
+          <p className="streak-bounty-description">{t.emptyDescription}</p>
+        )}
         {hasStreak ? (
           <div
             className={`streak-bounty-status ${stats.activeToday ? "streak-bounty-status--done" : ""}`}
@@ -200,9 +182,8 @@ export default memo(function StreakBounty({
           <div className="streak-bounty-first-day">
             <span>
               <Flame size={14} aria-hidden="true" />
-              {t.emptyStatus}
+              {t.noPoster}
             </span>
-            {t.noPoster}
           </div>
         )}
         <div className="streak-bounty-metrics">
@@ -224,7 +205,6 @@ export default memo(function StreakBounty({
           <div className="pirate-progress" aria-label={t.progression}>
             <div className="pirate-progress-heading">
               <strong>{progression.rank.name[language]}</strong>
-              <span>{dayLabel(stats.current, language)}</span>
             </div>
             <div
               className="pirate-progress-track"
@@ -316,7 +296,6 @@ export default memo(function StreakBounty({
               {Array.from({ length: 6 }, (_, index) => <i className="bounty-gold-spark" key={index} />)}
             </div>
           )}
-          <span className="bounty-poster-note">{t.fictional}</span>
         </figure>
       )}
     </section>

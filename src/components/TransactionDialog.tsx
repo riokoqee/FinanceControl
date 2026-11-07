@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   Check,
   X,
-  ShieldCheck,
   Utensils,
   ShoppingBag,
   Car,
@@ -199,7 +198,6 @@ export default function TransactionDialog({
             className="form-input"
             rows={2}
             maxLength={500}
-            placeholder={tr("Что-нибудь, что стоит запомнить…")}
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
@@ -214,10 +212,6 @@ export default function TransactionDialog({
         <Button onClick={onReload}>{tr("Загрузить актуальную запись")}</Button>
       )}
       <div className="dialog-footer">
-        <span className="dialog-save-hint">
-          <ShieldCheck size={14} />
-          {tr("Только на вашем устройстве")}
-        </span>
         <Button onClick={onClose}>{tr("Отмена")}</Button>
         <Button variant="primary" type="submit">
           <Check size={17} />

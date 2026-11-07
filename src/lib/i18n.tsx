@@ -3,6 +3,12 @@ import type { ReactNode } from "react";
 import type { Language } from "./finance";
 
 const english: Readonly<Record<string, string>> = {
+  "Автосохранение": "Autosave",
+  "Данные": "Data",
+  "Данные хранятся в браузере. Переносите их с PDF-копией.": "Stored in this browser. Use a PDF backup to transfer data.",
+  "Лучшая серия": "Best streak",
+  "Пока нет расходов": "No expenses yet",
+  "Условный курс": "Illustrative rates",
   "Тема оформления": "Appearance",
   "Один лимит для всех месяцев.": "One budget for every month.",
   "Данные и резервные копии": "Data and backups",

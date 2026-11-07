@@ -14,6 +14,7 @@ import {
 } from "../lib/finance";
 import type { Language, Transaction } from "../lib/finance";
 import { translate } from "../lib/i18n";
+import { plural } from "../lib/display";
 import { useLocalCalendarDay } from "../lib/useStreakStats";
 
 const russianPlural = new Intl.PluralRules("ru");
@@ -155,14 +156,7 @@ export default memo(function ActivityCalendar({
     <section className="panel activity-panel">
       <div className="activity-header">
         <div>
-          <span className="activity-eyebrow">
-            <CalendarDays size={15} />
-            {tr("ЖУРНАЛ КАПИТАНА")}
-          </span>
           <h2>{tr("Календарь активности")}</h2>
-          <p className="panel-subtitle">
-            {tr("Каждая запись — маленький шаг к большому сокровищу.")}
-          </p>
         </div>
         <div className="activity-year">
           <button
@@ -287,7 +281,7 @@ export default memo(function ActivityCalendar({
         <div>
           <PenLine size={16} />
           <strong>{total}</strong>
-          <span>{tr("записей за год")}</span>
+          <span>{entryLabel(total)}</span>
         </div>
         <div>
           <CalendarDays size={16} />
@@ -297,13 +291,13 @@ export default memo(function ActivityCalendar({
         <div>
           <Flame size={16} />
           <strong>{longest}</strong>
-          <span>{tr("дней подряд — лучший результат")}</span>
+          <span>{plural(longest, tr("день"), tr("дня"), tr("дней"), language)} · {tr("Лучшая серия")}</span>
         </div>
       </div>
       <p className="activity-hint">
-        {tr(
-          "Считаем день создания записи, а не дату покупки. Для старых записей используем дату покупки.",
-        )}
+        {language === "en"
+          ? "By date added; older records use the purchase date."
+          : "По дате добавления; старые записи — по дате покупки."}
       </p>
     </section>
   );

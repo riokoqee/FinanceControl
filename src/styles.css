@@ -122,7 +122,7 @@ input[type='number'] { appearance: textfield; -moz-appearance: textfield; }
 .brand-name .brand-beta { display: inline-block; position: absolute; top: 3px; right: -28px; padding: 3px 4px; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); font-size: 6px; font-weight: 600; letter-spacing: .5px; }
 .brand-name small { display: block; margin-top: 5px; color: var(--muted); font-size: 8px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
 .sidebar-label { margin: 52px 13px 13px; font-size: 9px; font-weight: 650; letter-spacing: 1.6px; color: var(--muted); text-transform: uppercase; }
-.nav-list { display: flex; flex-direction: column; gap: 7px; }
+.nav-list { display: flex; flex-direction: column; gap: 7px; margin-top: 36px; }
 .nav-label-short { display: none; }
 .nav-item {
   display: flex;
@@ -1622,3 +1622,18 @@ html[data-theme='dark'] .activity-day.activity-selected { outline-color: var(--g
 }
 
 .loading-state { padding: 28px 20px; color: var(--muted); font-size: 13px; line-height: 1.8; text-align: center; }
+
+/* Keep the layout compact when headings no longer need supporting paragraphs. */
+.heading-copy h1 { margin-bottom: 0; }
+.demo-banner { flex-wrap: nowrap; align-items: center; }
+.demo-banner .demo-link { order: 1; margin: 0 auto 0 0; }
+.demo-banner .demo-dismiss { order: 2; margin-left: 0; flex-shrink: 0; }
+.voyage-copy > strong { margin-bottom: 0; }
+.filter-summary { justify-content: flex-end; }
+.budget-panel { min-height: 0; }
+.budget-panel > h2 { margin-bottom: 20px; }
+.dialog-footer { justify-content: flex-end; }
+
+@media (max-width: 600px) {
+  .nav-list { margin-top: 0; }
+}

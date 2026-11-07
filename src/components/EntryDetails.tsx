@@ -4,7 +4,6 @@ import {
   CalendarDays,
   Check,
   FileText,
-  ListChecks,
   Pencil,
   Plus,
   ShieldCheck,
@@ -93,9 +92,6 @@ export default function EntryDetails({
     <div className="entry-details">
       <div className="dialog-header">
         <div>
-          <span className="dialog-eyebrow">
-            {tr("СУДОВОЙ ЖУРНАЛ · ДЕТАЛИ ЗАПИСИ")}
-          </span>
           <h2>{transaction.title}</h2>
         </div>
         <button
@@ -144,16 +140,7 @@ export default function EntryDetails({
             />
           ))}
         </ul>
-      ) : (
-        <div className="items-empty">
-          <ListChecks />
-          <p>
-            {tr(
-              "Здесь можно расшифровать покупку: батон, филе и всё остальное.",
-            )}
-          </p>
-        </div>
-      )}
+      ) : null}
       <form className="add-item-form" onSubmit={addItem}>
         <label>
           {tr("Название покупки")}
@@ -209,7 +196,7 @@ export default function EntryDetails({
       </div>
       <div className="detail-autosave">
         <ShieldCheck size={14} />
-        {tr("Покупки сохраняются сразу после добавления или изменения.")}
+        {tr("Автосохранение")}
       </div>
       <div className="dialog-footer">
         <button

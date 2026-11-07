@@ -4,7 +4,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   CircleHelp,
-  ShieldCheck,
   ShoppingBag,
   Sparkles,
   TrendingUp,
@@ -115,13 +114,7 @@ export default function OverviewPage({
       {streakCurrent === 0 && (
         <section className="voyage-banner" aria-label="BeliLog">
           <div className="voyage-copy">
-            <span className="voyage-kicker">BeliLog · Grand Line Ledger</span>
             <strong>{tr("Навстречу своим сокровищам")}</strong>
-            <p>{tr("Записывайте траты и держите курс к цели.")}</p>
-            <span className="voyage-meta">
-              <ShieldCheck size={13} />
-              {tr("Личный журнал · Без облака")}
-            </span>
           </div>
           <div className="voyage-art" aria-hidden="true">
             <img
@@ -144,14 +137,6 @@ export default function OverviewPage({
           <span className="demo-icon">
             <Sparkles size={21} />
           </span>
-          <div className="demo-copy">
-            <strong>{tr("Место для ваших финансовых привычек")}</strong>
-            <span>
-              {tr(
-                "Начните с первой покупки или посмотрите, как всё работает, на примере.",
-              )}
-            </span>
-          </div>
           <button className="demo-link" onClick={onDemo}>
             {tr("Посмотреть демо")} <ArrowUpRight size={16} />
           </button>
@@ -191,8 +176,8 @@ export default function OverviewPage({
                 <span className="tiny-dot" />
                 <span>
                   {transactions.length
-                    ? `${transactions.length} ${plural(transactions.length, tr("запись"), tr("записи"), tr("записей"), language)} ${tr("за этот месяц")}`
-                    : tr("Новый месяц — чистый лист")}
+                    ? `${transactions.length} ${plural(transactions.length, tr("запись"), tr("записи"), tr("записей"), language)}`
+                    : tr("Пока нет расходов")}
                 </span>
               </>
             )}
@@ -288,15 +273,13 @@ export default function OverviewPage({
             range={chartRange}
             currency={currency}
           />
-          <div className="chart-legend">
-            <span className="legend-dot" style={{ background: "#C35D4C" }} />
-            {tr("Расходы")}{" "}
-            <span className="chart-legend-note">
-              {chartRange === "week"
-                ? tr("Последние 7 дней выбранного месяца")
-                : tr("По дням месяца")}
-            </span>
-          </div>
+          {chartRange === "week" && (
+            <div className="chart-legend">
+              <span className="chart-legend-note">
+                {tr("Последние 7 дней выбранного месяца")}
+              </span>
+            </div>
+          )}
         </section>
         <section className="panel category-panel">
           <div className="panel-header">
@@ -383,11 +366,7 @@ export default function OverviewPage({
                 </div>
               ))
             ) : (
-              <p className="category-placeholder">
-                {tr("Добавьте расходы, и здесь появится")}
-                <br />
-                {tr("распределение по категориям.")}
-              </p>
+              <p className="category-placeholder">{tr("Пока нет расходов")}</p>
             )}
             {categories.length > 4 && (
               <button
@@ -438,12 +417,7 @@ export default function OverviewPage({
           <span className="budget-icon">
             <Wallet size={21} strokeWidth={1.6} />
           </span>
-          <h2>{tr("С заботой о будущем")}</h2>
-          <p>
-            {budget
-              ? tr("Бюджет помогает планировать траты.")
-              : tr("Задайте лимит и следите за остатком.")}
-          </p>
+          <h2>{tr("Месячный бюджет")}</h2>
           {budget > 0 && (
             <>
               <div className="budget-values">
@@ -479,12 +453,15 @@ export default function OverviewPage({
         </div>
       </div>
       <p className="workspace-footnote">
-        <ShieldCheck size={13} />
-        {tr("Только вы и ваши финансы. Данные хранятся в этом браузере.")}
-        <span title={tr(RATE_LABEL)}>
+        <button
+          type="button"
+          className="inline-link"
+          title={tr(RATE_LABEL)}
+          onClick={onProfile}
+        >
           <CircleHelp size={13} />
-          {tr("Суммы в валюте обзора — по условному курсу.")}
-        </span>
+          {tr("Условный курс")}
+        </button>
       </p>
     </>
   );

@@ -143,9 +143,7 @@ export default function ProfilePage({
                 ? tr("Пользователь")
                 : data.profile.name}
             </strong>
-            <span>{tr("Ваше личное финансовое пространство")}</span>
           </div>
-          <span className="profile-local-badge">{tr("Локальный профиль")}</span>
         </div>
         <div className="avatar-editor">
           <div className="avatar-editor-actions">
@@ -166,11 +164,6 @@ export default function ProfilePage({
               </Button>
             )}
           </div>
-          <span className="field-hint">
-            {tr(
-              "Переместите и увеличьте фото перед сохранением. PNG, JPG или WebP до 8 МБ.",
-            )}
-          </span>
           <input
             className="sr-only"
             ref={avatarRef}
@@ -214,8 +207,6 @@ export default function ProfilePage({
           </label>
         </div>
         <div className="settings-group">
-          <h3>{tr("Ваш финансовый ориентир")}</h3>
-          <p className="field-hint">{tr("Один лимит для всех месяцев.")}</p>
           <div className="form-row">
             <label className="field">
               <span className="field-label">{tr("Основная валюта")}</span>
@@ -251,6 +242,9 @@ export default function ProfilePage({
                 />
                 <span>{profile.currency}</span>
               </div>
+              <span className="field-hint">
+                {tr("Один лимит для всех месяцев.")}
+              </span>
             </label>
           </div>
           <div className="rates-note">
@@ -318,7 +312,7 @@ export default function ProfilePage({
           )}
           <span>
             <ShieldCheck size={14} />
-            {tr("Все настройки сохраняются автоматически.")}
+            {tr("Автосохранение")}
           </span>
           <Button variant="primary" type="submit">
             <Check size={17} />
@@ -333,10 +327,10 @@ export default function ProfilePage({
             <span className="storage-orbit orbit-one" />
             <span className="storage-orbit orbit-two" />
           </div>
-          <h2>{tr("Данные и резервные копии")}</h2>
+          <h2>{tr("Данные")}</h2>
           <p>
             {tr(
-              "Записи хранятся в этом браузере. PDF-копия поможет перенести их на другое устройство.",
+              "Данные хранятся в браузере. Переносите их с PDF-копией.",
             )}
           </p>
           <div className="storage-details">
@@ -378,15 +372,11 @@ export default function ProfilePage({
               }}
             />
           </div>
-          <p className="field-hint">
-            {tr("PDF содержит расходы, список покупок, аватар и настройки.")}
-          </p>
         </section>
         <section className="panel demo-card">
           <Sparkles size={19} />
           <div>
             <h3>{tr("Попробовать на примере")}</h3>
-            <p>{tr("Демо с расходами, категориями и бюджетом.")}</p>
           </div>
           <button
             className="icon-button"

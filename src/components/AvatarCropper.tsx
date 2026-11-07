@@ -6,7 +6,6 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
-  Crop,
   LoaderCircle,
   Minus,
   Plus,
@@ -29,14 +28,12 @@ import "./AvatarCropper.css";
 
 const copy = {
   ru: {
-    eyebrow: "ФОТО КАПИТАНА",
     title: "Настроить аватар",
-    subtitle: "Выберите, какая часть фото останется в кадре.",
     close: "Закрыть редактор аватара",
     loading: "Загружаем фото…",
     region: "Область кадрирования аватара",
     image: "Фото для кадрирования",
-    hint: "Перетащите фото или используйте стрелки на клавиатуре.",
+    hint: "Перетащите фото или двигайте стрелками.",
     zoom: "Масштаб",
     zoomIn: "Увеличить фото",
     zoomOut: "Уменьшить фото",
@@ -48,7 +45,6 @@ const copy = {
     move: "Перемещение фото",
     resolution: "Размер фото",
     preview: "Предпросмотр аватара",
-    original: "Исходный файл останется без изменений.",
     cancel: "Отмена",
     save: "Сохранить аватар",
     saving: "Сохраняем…",
@@ -60,14 +56,12 @@ const copy = {
       "Не удалось сохранить фото. Попробуйте ещё раз или выберите другое изображение.",
   },
   en: {
-    eyebrow: "CAPTAIN’S PHOTO",
     title: "Adjust avatar",
-    subtitle: "Choose which part of your photo to keep.",
     close: "Close avatar editor",
     loading: "Loading photo…",
     region: "Avatar crop area",
     image: "Photo to crop",
-    hint: "Drag your photo or use the arrow keys on your keyboard.",
+    hint: "Drag your photo or use the arrow keys.",
     zoom: "Zoom",
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
@@ -79,7 +73,6 @@ const copy = {
     move: "Move photo",
     resolution: "Photo size",
     preview: "Avatar preview",
-    original: "Your original file stays unchanged.",
     cancel: "Cancel",
     save: "Save avatar",
     saving: "Saving…",
@@ -295,12 +288,7 @@ export default function AvatarCropper({
     <div className="avatar-crop-editor">
       <div className="avatar-crop-header">
         <div>
-          <span className="avatar-crop-eyebrow">
-            <Crop size={13} />
-            {text.eyebrow}
-          </span>
           <h2>{text.title}</h2>
-          <p>{text.subtitle}</p>
         </div>
         <button
           type="button"
@@ -459,7 +447,6 @@ export default function AvatarCropper({
               />
             </div>
           </div>
-          <p className="avatar-crop-original">{text.original}</p>
         </>
       )}
       {error && (

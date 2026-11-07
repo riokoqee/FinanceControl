@@ -40,16 +40,12 @@ const copy = {
     all: "Всё",
     filters: "Показать покупки",
     totals: "Стоимость купленного",
-    empty: "Собираемся за продуктами?",
-    emptyDescription: "Добавьте продукты, а после покупки впишите цену и подтвердите — расход сохранится, товар уйдёт из списка.",
+    empty: "Список пуст",
     emptyFilter: "Здесь пока нет продуктов",
-    emptyPending: "Все продукты из списка уже куплены.",
-    emptyPurchased: "Впишите цену рядом с продуктом, и он появится здесь.",
-    explanation: "Цена сохраняется автоматически. «Подтвердить покупку» убирает товар из списка и оставляет расход в журнале.",
+    explanation: "Укажите цену — расход сохранится. Подтвердите покупку, чтобы убрать товар из списка.",
     showMore: "Показать ещё",
     shown: "Показано",
     of: "из",
-    auto: "Сохраняется автоматически",
     saving: "Сохраняем…",
     saved: "Сохранено",
     price: "Цена",
@@ -78,16 +74,12 @@ const copy = {
     all: "All",
     filters: "Show purchases",
     totals: "Purchased total",
-    empty: "Getting ready for groceries?",
-    emptyDescription: "Add your groceries, then enter the price and confirm after buying. The expense stays; the item leaves your list.",
+    empty: "Your list is empty",
     emptyFilter: "No products here yet",
-    emptyPending: "Everything on your list has been purchased.",
-    emptyPurchased: "Enter a price beside a product to see it here.",
-    explanation: "Prices save automatically. Confirm purchase clears the item from your list and keeps the expense in your journal.",
+    explanation: "Enter a price to save the expense. Confirm purchase to clear the item from your list.",
     showMore: "Show more",
     shown: "Showing",
     of: "of",
-    auto: "Saves automatically",
     saving: "Saving…",
     saved: "Saved",
     price: "Price",
@@ -256,7 +248,6 @@ export default function ShoppingList({
             <span><span className="shopping-count-dot" /> {text.pending} <strong>{pendingCount}</strong></span>
             <span><CheckCheck size={14} aria-hidden="true" /> {text.purchased} <strong>{purchasedCount}</strong></span>
           </div>
-          <span className="shopping-auto"><Check size={12} aria-hidden="true" /> {text.auto}</span>
         </div>
 
         {items.length > 0 && <div className="shopping-filters" role="group" aria-label={text.filters}>
@@ -286,7 +277,6 @@ export default function ShoppingList({
         </ul> : <div className="shopping-empty">
           <ListChecks size={34} strokeWidth={1.35} aria-hidden="true" />
           <h3>{items.length ? text.emptyFilter : text.empty}</h3>
-          <p>{items.length ? (filter === "pending" ? text.emptyPending : text.emptyPurchased) : text.emptyDescription}</p>
         </div>}
 
         {shown.length < visible.length && <div className="shopping-more">

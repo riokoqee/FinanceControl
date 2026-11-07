@@ -15,7 +15,6 @@ import {
   CircleHelp,
   Download,
   LayoutDashboard,
-  Compass,
   ListChecks,
   Moon,
   Plus,
@@ -744,17 +743,13 @@ export default function App() {
         {isFiltered ? <Search size={25} /> : <ArrowDownLeft size={27} />}
       </span>
       <h3 className="empty-title">
-        {isFiltered
-          ? tr("Ничего не нашлось")
-          : tr("Большая ясность начинается с малого")}
+        {isFiltered ? tr("Ничего не нашлось") : tr("Пока нет расходов")}
       </h3>
-      <p className="empty-description">
-        {isFiltered
-          ? tr("Попробуйте другое название или измените фильтры.")
-          : tr(
-              "Добавьте первую покупку — мы соберём всё остальное в понятную картину.",
-            )}
-      </p>
+      {isFiltered && (
+        <p className="empty-description">
+          {tr("Попробуйте другое название или измените фильтры.")}
+        </p>
+      )}
       <div className="empty-actions">
         {isFiltered ? (
           <Button
@@ -801,7 +796,6 @@ export default function App() {
               <span className="brand-tagline">Every Berry Counts.</span>
             </span>
           </a>
-          <div className="sidebar-label">{tr("ЛИЧНОЕ ПРОСТРАНСТВО")}</div>
           <nav className="nav-list" aria-label={tr("Основная навигация")}>
             {(
               [
@@ -851,17 +845,6 @@ export default function App() {
             ))}
           </nav>
           <div className="sidebar-bottom">
-            <div className="sidebar-tip">
-              <span className="sidebar-tip-icon">
-                <Compass size={22} strokeWidth={1.5} />
-              </span>
-              <strong>
-                {tr("Маленькие шаги.")}
-                <br />
-                {tr("Большая разница.")}
-              </strong>
-              <p>{tr("Понимать свои расходы — уже хорошая привычка.")}</p>
-            </div>
             <div
               className={`local-status ${!storageOk ? "storage-error" : ""}`}
             >
@@ -873,17 +856,11 @@ export default function App() {
               </span>
               <ShieldCheck size={14} />
             </div>
-            <div className="sidebar-foot">
-              <span>Every Berry Counts.</span>
-              <span>v2.1</span>
-            </div>
           </div>
         </aside>
         <div className="main-shell">
           <header className="topbar">
             <div className="breadcrumb">
-              <span>{tr("Личное пространство")}</span>
-              <ChevronRight size={14} />
               <strong>{tr(pageLabels[page])}</strong>
             </div>
             <div className="topbar-actions">
@@ -892,10 +869,6 @@ export default function App() {
                 language={language}
                 onClick={() => navigate("overview")}
               />
-              <span className="local-chip">
-                <span className="status-dot" />
-                {tr("Локально")}
-              </span>
               <button
                 className="theme-button icon-button"
                 onClick={toggleTheme}
@@ -976,51 +949,29 @@ export default function App() {
             <div className="page-enter" key={page}>
               <div className="page-heading">
                 <div className="heading-copy">
-                  <div className="eyebrow">
-                    {page === "overview"
-                      ? tr("МЕНЬШЕ ХАОСА. БОЛЬШЕ ЯСНОСТИ.")
-                      : page === "tracker"
-                        ? tr("У КАЖДОЙ ПОКУПКИ ЕСТЬ ИСТОРИЯ")
-                        : page === "shopping"
-                          ? tr("СНАЧАЛА СПИСОК. ПОТОМ ПОКУПКА.")
-                          : tr("ПРОСТРАНСТВО, КОТОРОЕ ПОДСТРАИВАЕТСЯ ПОД ВАС")}
-                  </div>
                   <h1>
                     {page === "overview"
                       ? tr("Всё под контролем")
                       : tr(pageLabels[page])}
                     <span className="heading-dot">.</span>
                   </h1>
-                  <p>
-                    {page === "overview"
-                      ? tr("Ваши расходы, привычки и немного спокойствия.")
-                      : page === "tracker"
-                        ? tr("Записывайте важное. Замечайте повседневное.")
-                        : page === "shopping"
-                          ? tr(
-                              "Запланируйте продукты, а после покупки укажите цену — всё сохранится автоматически.",
-                            )
-                          : tr("Ваши настройки и данные — в одном месте.")}
-                  </p>
                 </div>
-                <div className="header-actions">
-                  {(page === "overview" || page === "tracker") && (
-                    <>
-                      <Button
-                        className="export-button"
-                        onClick={exportReport}
-                        disabled={pdfBusy}
-                      >
-                        <Download size={17} />
-                        {pdfBusy ? "…" : tr("Создать PDF")}
-                      </Button>
-                      <Button variant="primary" onClick={() => setModal("new")}>
-                        <Plus size={19} />
-                        {tr("Добавить расход")}
-                      </Button>
-                    </>
-                  )}
-                </div>
+                {(page === "overview" || page === "tracker") && (
+                  <div className="header-actions">
+                    <Button
+                      className="export-button"
+                      onClick={exportReport}
+                      disabled={pdfBusy}
+                    >
+                      <Download size={17} />
+                      {pdfBusy ? "…" : tr("Создать PDF")}
+                    </Button>
+                    <Button variant="primary" onClick={() => setModal("new")}>
+                      <Plus size={19} />
+                      {tr("Добавить расход")}
+                    </Button>
+                  </div>
+                )}
               </div>
               {(page === "overview" || page === "tracker") && (
                 <div className="period-bar">
@@ -1261,7 +1212,6 @@ export default function App() {
           <Modal onClose={() => setPendingImport(null)}>
             <div className="dialog-header">
               <div>
-                <span className="dialog-eyebrow">BeliLog · PDF</span>
                 <h2>{tr("Копия проверена")}</h2>
               </div>
               <button
@@ -1337,11 +1287,6 @@ export default function App() {
           <Modal onClose={() => setConfirmation(null)}>
             <div className="dialog-header">
               <div>
-                <span className="dialog-eyebrow">
-                  {confirmation === "reset"
-                    ? tr("УПРАВЛЕНИЕ ДАННЫМИ")
-                    : tr("ПОПРОБОВАТЬ НА ПРИМЕРЕ")}
-                </span>
                 <h2>
                   {confirmation === "recovery"
                     ? tr("Восстановить последнюю копию?")
