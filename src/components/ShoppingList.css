@@ -91,3 +91,92 @@
 @media (prefers-reduced-motion: reduce) {
   .shopping-page button, .shopping-page input, .shopping-page select { transition: none; }
 }
+
+
+/* Shopping: a practical plan, clear prices and a calm ledger. */
+.shopping-ledger { border-radius: var(--radius-lg); }
+.shopping-add-form { grid-template-columns: minmax(0, 1fr) 96px auto; gap: 12px; padding: 24px; background: var(--surface-raised); }
+.shopping-add-form label { margin-bottom: 8px; color: var(--text-secondary); font-size: 12px; }
+.shopping-add-form .form-input { min-height: 44px; border-color: var(--control-border); border-radius: var(--radius-sm); background: var(--surface); font-size: 14px; }
+.shopping-add-button { min-height: 44px; padding: 12px 20px; border-color: var(--control-border); border-radius: var(--radius-sm); background: var(--accent); color: var(--on-accent); font-size: 12px; }
+.shopping-add-button:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--control-border-hover); }
+.shopping-form-error { font-size: 12px; line-height: 1.6; }
+.shopping-summary { gap: 12px; padding: 12px 24px; background: var(--surface); }
+.shopping-counts { gap: 12px 24px; }
+.shopping-counts > span { gap: 8px; color: var(--text-muted); font-size: 12px; }
+.shopping-counts strong { color: var(--text); }
+.shopping-count-dot { width: 8px; height: 8px; border-color: var(--control-border); }
+.shopping-templates-button { gap: 8px; min-height: 44px; margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 12px; }
+.shopping-templates-button:hover { border-color: var(--control-border); background: var(--surface-hover); color: var(--text); }
+.shopping-filters { gap: 8px; padding: 16px 24px 12px; }
+.shopping-filter { min-height: 44px; padding: 8px 16px; border-radius: var(--radius-sm); font-size: 12px; }
+.shopping-filter:hover { background: var(--surface-hover); }
+.shopping-filter[aria-pressed='true'] { border-color: var(--control-border); background: var(--surface-raised); color: var(--text); }
+.shopping-items { padding-inline: 24px; }
+.shopping-item { grid-template-columns: 24px minmax(0, 1fr) 224px 44px; column-gap: 12px; padding-block: 20px; }
+.shopping-item-marker { width: 24px; height: 24px; border-color: var(--control-border); }
+.shopping-item-marker > span { background: var(--text-muted); }
+.shopping-item-purchased .shopping-item-marker { border-color: var(--success); background: var(--success-soft); color: var(--success); }
+.shopping-title-input { min-height: 44px; margin: -4px -8px 0; padding: 8px; border-radius: var(--radius-sm); color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.5; }
+.shopping-title-input:hover { border-color: var(--control-border); background: var(--surface-hover); }
+.shopping-title-input:focus { border-color: var(--focus-ring); background: var(--surface); box-shadow: none; outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.shopping-item-state { padding-bottom: 0; color: var(--text-muted); font-size: 11px; line-height: 1.6; }
+.shopping-item-price { grid-template-columns: minmax(0, 1fr) 80px; gap: 8px; }
+.shopping-item-price .form-input { min-height: 44px; padding: 8px 12px; border-color: var(--control-border); border-radius: var(--radius-sm); background: var(--surface-raised); font-size: 13px; }
+.shopping-item-price .shopping-price-input { color: var(--text); font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.shopping-price-input[aria-invalid='true'], .shopping-title-input[aria-invalid='true'] { border-color: var(--danger); }
+.shopping-save-status { min-height: 16px; margin-bottom: -4px; color: var(--success); font-size: 11px; line-height: 1.45; }
+.shopping-confirm { gap: 8px; min-height: 44px; margin-top: 4px; padding: 8px 12px; border-color: var(--success); border-radius: var(--radius-sm); background: var(--success-soft); color: var(--success); font-size: 12px; transition: background-color 160ms ease, color 160ms ease; }
+.shopping-confirm:hover:not(:disabled) { background: var(--success); color: var(--surface); }
+/* The success fill is pale in dark mode, so its hover label uses navy. */
+:root[data-theme='dark'] .shopping-confirm:hover:not(:disabled) { color: var(--on-accent); }
+.shopping-remove { width: 44px; height: 44px; border-radius: var(--radius-sm); color: var(--text-muted); }
+.shopping-row-error { margin-top: 8px; color: var(--danger); font-size: 12px; line-height: 1.6; }
+.shopping-price-error, .shopping-conflict { padding: 8px 12px; border: 1px solid var(--danger); border-radius: var(--radius-sm); background: var(--danger-soft); }
+.shopping-conflict { grid-column: 2 / -1; margin-top: 12px; }
+.shopping-conflict-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.shopping-conflict-actions .button { min-height: 44px; white-space: normal; }
+.shopping-empty { min-height: 240px; padding: 32px 24px; }
+.shopping-empty > svg { margin-bottom: 16px; color: var(--text-muted); }
+.shopping-empty h3 { margin-bottom: 8px; font-size: 18px; }
+.shopping-more { gap: 12px; padding: 16px 24px; font-size: 12px; flex-wrap: wrap; }
+.shopping-more .button { min-height: 44px; }
+.shopping-totals { gap: 16px; padding: 20px 24px; background: var(--surface-raised); }
+.shopping-totals > span { color: var(--text-secondary); font-size: 12px; }
+.shopping-totals > div { min-width: 0; max-width: 100%; gap: 12px 24px; }
+.shopping-totals strong { min-width: 0; max-width: 100%; color: var(--text); font-size: 18px; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
+.shopping-totals small { margin-left: 4px; color: var(--text-muted); font-size: 11px; }
+.shopping-explanation { margin-top: 16px; color: var(--text-muted); font-size: 12px; line-height: 1.7; }
+.shopping-page :is(button, input, select):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; box-shadow: none; }
+@media (max-width: 680px) {
+  .shopping-add-form { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 16px; }
+  .shopping-add-name { grid-column: 1 / -1; }
+  .shopping-add-money { grid-column: 1; grid-row: 2; }
+  .shopping-add-button { grid-column: 2; grid-row: 2; min-width: 0; padding-inline: 12px; }
+  .shopping-add-form .form-input { font-size: 16px; }
+  .shopping-summary { padding: 12px 16px; }
+  .shopping-counts { gap: 12px 16px; }
+  .shopping-templates-button { padding-inline: 8px; }
+  .shopping-filters { gap: 4px; padding: 12px 16px 8px; }
+  .shopping-filter { padding-inline: 12px; }
+  .shopping-items { padding-inline: 16px; }
+  .shopping-item { grid-template-columns: 24px minmax(0, 1fr) 44px; gap: 8px; padding-block: 16px; }
+  .shopping-item-marker { grid-column: 1; grid-row: 1; }
+  .shopping-item-name { grid-column: 2; grid-row: 1; }
+  .shopping-item-price { grid-column: 2; grid-row: 2; grid-template-columns: minmax(0, 1fr) 80px; }
+  .shopping-remove { grid-column: 3; grid-row: 1; }
+  .shopping-title-input, .shopping-item-price .form-input { font-size: 16px; }
+  .shopping-price-error { grid-column: 2 / -1; text-align: left; }
+  .shopping-conflict { grid-column: 1 / -1; }
+  .shopping-save-status { text-align: left; }
+  .shopping-empty { padding-inline: 16px; }
+  .shopping-more, .shopping-totals { padding: 16px; }
+  .shopping-totals > div { justify-content: flex-start; gap: 8px 16px; }
+}
+@media (max-width: 420px) {
+  .shopping-more .button { width: 100%; }
+  .shopping-conflict-actions .button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shopping-page button, .shopping-page input, .shopping-page select { animation: none !important; transition: none !important; }
+}
