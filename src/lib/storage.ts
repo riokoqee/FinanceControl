@@ -4,6 +4,7 @@ import {
   createEmptyData,
   validateBackup,
   type AppData,
+  type CategoryBudget,
   type Profile,
   type Transaction,
 } from './finance';
@@ -161,7 +162,9 @@ function mergeFields<T extends object>(base: T, current: T, desired: T): T {
   return result as T;
 }
 
-function mergeRecords<T extends { id: string }>(base: T[], current: T[], desired: T[]): T[] {
+function mergeRecords<T extends { id: string }>(
+  base: T[], current: T[], desired: T[], options: { atomic?: boolean } = {},
+): T[] {
   const originals = new Map(base.map((record) => [record.id, record]));
   const locals = new Map(desired.map((record) => [record.id, record]));
   const remotes = new Map(current.map((record) => [record.id, record]));
@@ -175,6 +178,11 @@ function mergeRecords<T extends { id: string }>(base: T[], current: T[], desired
     } else if (!local) {
       if (!same(remote, original)) throw new DataConflictError();
     } else {
+      // Amount and currency are one value: independently merging these fields
+      // could silently turn an intended EUR limit into the same number in USD.
+      if (options.atomic && !same(local, original) && !same(remote, original) && !same(remote, local)) {
+        throw new DataConflictError();
+      }
       result.push(mergeFields(original, remote, local));
     }
   }
@@ -197,11 +205,15 @@ export function mergeAppData(base: AppData, current: AppData, desired: AppData):
   // never cached or trusted by a later call with a potentially edited object.
   if (desired === base || desired === current) return remote;
   const shoppingList = mergeRecords(original.shoppingList ?? [], remote.shoppingList ?? [], local.shoppingList ?? []);
+  const categoryBudgets = mergeRecords(original.categoryBudgets ?? [], remote.categoryBudgets ?? [], local.categoryBudgets ?? [], { atomic: true });
+  const shoppingTemplates = mergeRecords(original.shoppingTemplates ?? [], remote.shoppingTemplates ?? [], local.shoppingTemplates ?? []);
   return validateBackup({
-    version: 1,
+    version: Math.max(original.version, remote.version, local.version),
     profile: mergeFields(original.profile, remote.profile, local.profile),
     transactions: mergeRecords(original.transactions, remote.transactions, local.transactions),
     ...([original, remote, local].some((data) => data.shoppingList !== undefined) ? { shoppingList } : {}),
+    ...([original, remote, local].some((data) => data.categoryBudgets !== undefined) ? { categoryBudgets } : {}),
+    ...([original, remote, local].some((data) => data.shoppingTemplates !== undefined) ? { shoppingTemplates } : {}),
   });
 }
 
@@ -224,6 +236,16 @@ function shareUnchanged(previous: AppData, next: AppData): AppData {
       shoppingList: previous.shoppingList === undefined
         ? next.shoppingList
         : shareRecords(previous.shoppingList, next.shoppingList),
+    } : {}),
+    ...(next.categoryBudgets !== undefined ? {
+      categoryBudgets: previous.categoryBudgets === undefined
+        ? next.categoryBudgets
+        : shareRecords(previous.categoryBudgets, next.categoryBudgets),
+    } : {}),
+    ...(next.shoppingTemplates !== undefined ? {
+      shoppingTemplates: previous.shoppingTemplates === undefined
+        ? next.shoppingTemplates
+        : shareRecords(previous.shoppingTemplates, next.shoppingTemplates),
     } : {}),
   };
 }
@@ -269,6 +291,12 @@ export function commitStoredData(
         ...(base.shoppingList !== undefined || candidate.shoppingList !== undefined ? {
           shoppingList: retainRecordOrder(base.shoppingList ?? [], candidate.shoppingList ?? []),
         } : {}),
+        ...(base.categoryBudgets !== undefined || candidate.categoryBudgets !== undefined ? {
+          categoryBudgets: retainRecordOrder(base.categoryBudgets ?? [], candidate.categoryBudgets ?? []),
+        } : {}),
+        ...(base.shoppingTemplates !== undefined || candidate.shoppingTemplates !== undefined ? {
+          shoppingTemplates: retainRecordOrder(base.shoppingTemplates ?? [], candidate.shoppingTemplates ?? []),
+        } : {}),
       };
     } else {
       const stored = readSnapshot(destination, raw);
@@ -287,6 +315,48 @@ export function commitStoredData(
   throw new DataConflictError();
 }
 
+/**
+ * Recompute a pure mutation against the latest primary on every retry. Use for
+ * actions whose preconditions depend on the whole current collection, such as
+ * template capacity and shopping-list deduplication, rather than stale editors.
+ */
+export function commitStoredMutation(
+  base: AppData,
+  update: (current: AppData) => AppData,
+  storage?: StorageAdapter,
+  options: WriteOptions = {},
+): AppData {
+  const destination = browserStorage(storage);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const raw = destination.getItem(STORAGE_KEY);
+    const stored = readSnapshot(destination, raw);
+    if ((stored.status === 'corrupt' || stored.status === 'recovered') && !options.replaceCorrupt) {
+      throw new StorageRecoveryError();
+    }
+    const candidate = validateBackup(update(stored.data));
+    const next: AppData = {
+      ...candidate,
+      transactions: retainRecordOrder(stored.data.transactions, candidate.transactions),
+      ...(stored.data.shoppingList !== undefined || candidate.shoppingList !== undefined ? {
+        shoppingList: retainRecordOrder(stored.data.shoppingList ?? [], candidate.shoppingList ?? []),
+      } : {}),
+      ...(stored.data.categoryBudgets !== undefined || candidate.categoryBudgets !== undefined ? {
+        categoryBudgets: retainRecordOrder(stored.data.categoryBudgets ?? [], candidate.categoryBudgets ?? []),
+      } : {}),
+      ...(stored.data.shoppingTemplates !== undefined || candidate.shoppingTemplates !== undefined ? {
+        shoppingTemplates: retainRecordOrder(stored.data.shoppingTemplates ?? [], candidate.shoppingTemplates ?? []),
+      } : {}),
+    };
+    try {
+      writePrepared(JSON.stringify(next), destination, options, { raw });
+      return shareUnchanged(base, next);
+    } catch (cause) {
+      if (!(cause instanceof StorageChangedError)) throw cause;
+    }
+  }
+  throw new DataConflictError();
+}
+
 /** Merge a profile editor without copying or validating the expense history. */
 export function mergeProfileDraft(base: Profile, current: Profile, draft: Profile): Profile {
   const profileData = createEmptyData();
@@ -294,6 +364,19 @@ export function mergeProfileDraft(base: Profile, current: Profile, draft: Profil
   const remote = current === base ? original : validateBackup({ ...profileData, profile: current }).profile;
   const local = draft === base ? original : draft === current ? remote : validateBackup({ ...profileData, profile: draft }).profile;
   return validateBackup({ ...profileData, profile: mergeFields(original, remote, local) }).profile;
+}
+
+/** Keep separate categories independent, but amount and currency indivisible. */
+export function mergeCategoryBudgetsDraft(
+  base: CategoryBudget[],
+  current: CategoryBudget[],
+  draft: CategoryBudget[],
+): CategoryBudget[] {
+  const empty = createEmptyData();
+  const original = validateBackup({ ...empty, categoryBudgets: base }).categoryBudgets!;
+  const remote = current === base ? original : validateBackup({ ...empty, categoryBudgets: current }).categoryBudgets!;
+  const local = draft === base ? original : draft === current ? remote : validateBackup({ ...empty, categoryBudgets: draft }).categoryBudgets!;
+  return validateBackup({ ...empty, categoryBudgets: mergeRecords(original, remote, local, { atomic: true }) }).categoryBudgets!;
 }
 
 /** A dialog changes only its edited fields, retaining newer purchase details and prices. */

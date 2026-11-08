@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   STORAGE_KEY,
+  MAX_AMOUNT,
+  MAX_SHOPPING_TEMPLATES,
+  MAX_TEMPLATE_ITEMS,
   convertAmount,
   createDemoData,
   createEmptyData,
@@ -17,6 +20,99 @@ import {
   todayString,
   validateBackup,
 } from './finance';
+
+describe('optional category limits and shopping templates', () => {
+  const extensions = () => ({
+    categoryBudgets: [{ id: 'food', amount: 200.25, currency: 'EUR' }],
+    shoppingTemplates: [{
+      id: 'weekly', name: 'Weekly groceries',
+      items: [{ title: 'Bread', currency: 'EUR' }, { title: 'Milk', currency: 'KZT' }],
+    }],
+  });
+
+  it('keeps legacy backup shape, and round-trips new optional records without mutating input', () => {
+    const legacy = createEmptyData();
+    expect(validateBackup(legacy)).toEqual(legacy);
+    expect(validateBackup(legacy)).not.toHaveProperty('categoryBudgets');
+    expect(validateBackup(legacy)).not.toHaveProperty('shoppingTemplates');
+    const data = { ...legacy, version: 2, ...extensions() };
+    const restored = validateBackup(JSON.stringify(data));
+    expect(restored).toEqual(data);
+    expect(restored.categoryBudgets).not.toBe(data.categoryBudgets);
+    expect(restored.shoppingTemplates![0].items).not.toBe(data.shoppingTemplates[0].items);
+    expect(validateBackup({ ...legacy, categoryBudgets: [], shoppingTemplates: [] })).toEqual({ ...legacy, version: 2, categoryBudgets: [], shoppingTemplates: [] });
+  });
+
+  it('upgrades feature-bearing version-one copies and never downgrades version two', () => {
+    expect(validateBackup({ ...createEmptyData(), ...extensions() }).version).toBe(2);
+    expect(validateBackup({ ...createEmptyData(), categoryBudgets: [] }).version).toBe(2);
+    expect(validateBackup({ ...createEmptyData(), shoppingTemplates: [] }).version).toBe(2);
+    expect(validateBackup({ ...createEmptyData(), version: 2 }).version).toBe(2);
+    expect(() => validateBackup({ ...createEmptyData(), version: 3 })).toThrow(/формат/);
+  });
+
+  it('canonicalizes names and strips unsupported nested properties', () => {
+    const source = { ...createEmptyData(), ...extensions() };
+    const restored = validateBackup({
+      ...source,
+      categoryBudgets: [{ ...source.categoryBudgets[0], arbitrary: true }],
+      shoppingTemplates: [{
+        ...source.shoppingTemplates[0], name: '  Weekly groceries  ', arbitrary: true,
+        items: [{ title: '  Bread  ', currency: 'EUR', amount: 999 }],
+      }],
+    });
+    expect(restored.categoryBudgets).toEqual(source.categoryBudgets);
+    expect(restored.shoppingTemplates).toEqual([{ id: 'weekly', name: 'Weekly groceries', items: [{ title: 'Bread', currency: 'EUR' }] }]);
+    expect(source.shoppingTemplates[0].items).toHaveLength(2);
+  });
+
+  it.each([
+    ['negative', -1], ['zero', 0], ['sub-cent', 0.001], ['excess decimals', 2.345],
+    ['NaN', NaN], ['infinite', Infinity], ['oversized', MAX_AMOUNT + 1], ['string', '200'],
+  ])('rejects a %s category limit', (_label, amount) => {
+    expect(() => validateBackup({ ...createEmptyData(), categoryBudgets: [{ id: 'food', amount, currency: 'EUR' }] })).toThrow();
+  });
+
+  it('accepts whole cents at ordinary and maximum amounts', () => {
+    for (const amount of [0.01, 0.29, 19.99, MAX_AMOUNT - 0.01, MAX_AMOUNT]) {
+      expect(validateBackup({ ...createEmptyData(), categoryBudgets: [{ id: 'food', amount, currency: 'USD' }] }).categoryBudgets![0].amount).toBe(amount);
+    }
+  });
+
+  it.each([
+    null, {}, undefined,
+    [{ id: 'unknown', amount: 10, currency: 'EUR' }],
+    [{ id: 'food', amount: 10, currency: 'GBP' }],
+    [{ id: 'food', amount: 10, currency: 'EUR' }, { id: 'food', amount: 20, currency: 'KZT' }],
+    Array.from({ length: 8 }, () => ({ id: 'food', amount: 10, currency: 'EUR' })),
+  ].map((value) => [value]))('rejects malformed or duplicate category limits', (categoryBudgets) => {
+    expect(() => validateBackup({ ...createEmptyData(), categoryBudgets })).toThrow();
+  });
+
+  it.each([
+    null, {}, undefined,
+    [{ id: '', name: 'Weekly', items: [{ title: 'Bread', currency: 'EUR' }] }],
+    [{ id: 'x'.repeat(129), name: 'Weekly', items: [{ title: 'Bread', currency: 'EUR' }] }],
+    [{ id: 'weekly', name: '   ', items: [{ title: 'Bread', currency: 'EUR' }] }],
+    [{ id: 'weekly', name: 'x'.repeat(61), items: [{ title: 'Bread', currency: 'EUR' }] }],
+    [{ id: 'weekly', name: 'Weekly', items: [] }],
+    [{ id: 'weekly', name: 'Weekly', items: {} }],
+    [{ id: 'weekly', name: 'Weekly', items: [null] }],
+    [{ id: 'weekly', name: 'Weekly', items: [{ title: '   ', currency: 'EUR' }] }],
+    [{ id: 'weekly', name: 'Weekly', items: [{ title: 'x'.repeat(161), currency: 'EUR' }] }],
+    [{ id: 'weekly', name: 'Weekly', items: [{ title: 'Bread', currency: 'GBP' }] }],
+  ].map((value) => [value]))('rejects malformed shopping templates', (shoppingTemplates) => {
+    expect(() => validateBackup({ ...createEmptyData(), shoppingTemplates })).toThrow();
+  });
+
+  it('rejects duplicate normalized template IDs and enforces bounded list sizes', () => {
+    const template = extensions().shoppingTemplates[0];
+    expect(() => validateBackup({ ...createEmptyData(), shoppingTemplates: [template, { ...template, id: ' weekly ' }] })).toThrow(/ID/);
+    expect(() => validateBackup({ ...createEmptyData(), shoppingTemplates: Array.from({ length: MAX_SHOPPING_TEMPLATES + 1 }, (_, index) => ({ ...template, id: String(index) })) })).toThrow();
+    expect(() => validateBackup({ ...createEmptyData(), shoppingTemplates: [{ ...template, items: Array.from({ length: MAX_TEMPLATE_ITEMS + 1 }, () => template.items[0]) }] })).toThrow();
+    expect(validateBackup({ ...createEmptyData(), shoppingTemplates: Array.from({ length: MAX_SHOPPING_TEMPLATES }, (_, index) => ({ ...template, id: String(index), items: Array.from({ length: MAX_TEMPLATE_ITEMS }, () => template.items[0]) })) }).shoppingTemplates).toHaveLength(MAX_SHOPPING_TEMPLATES);
+  });
+});
 
 describe('finance data and backups', () => {
   it('starts empty and gives each instance its own profile and transactions', () => {
@@ -60,7 +156,7 @@ describe('finance data and backups', () => {
     const data = createDemoData();
     data.transactions[1].id = data.transactions[0].id;
     expect(() => validateBackup(data)).toThrow(/ID/);
-    expect(() => validateBackup({ ...createEmptyData(), version: 2 })).toThrow();
+    expect(() => validateBackup({ ...createEmptyData(), version: 3 })).toThrow();
     expect(() => validateBackup('{broken')).toThrow(/JSON/);
     expect(() => validateBackup(null)).toThrow();
   });

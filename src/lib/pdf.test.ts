@@ -8,6 +8,7 @@ import { buildPdf, readPdfBackup } from './pdf';
 const fontBytes = readFileSync(new URL('../../public/fonts/report-font.ttf', import.meta.url));
 const data: AppData = {
   ...createEmptyData(),
+  version: 2,
   profile: {
     ...createEmptyData().profile, name: 'Аскар', currency: 'EUR', language: 'ru',
     avatar: 'data:image/png;base64,iVBORw0KGgo=',
@@ -25,6 +26,8 @@ const data: AppData = {
     { id: 'taxi', title: 'Такси', amount: 3200, currency: 'KZT', category: 'transport', date: '2026-10-26' },
     { id: 'book', title: 'Book', amount: 12, currency: 'USD', category: 'other', date: '2026-10-25' },
   ],
+  categoryBudgets: [{ id: 'food', amount: 200, currency: 'EUR' }, { id: 'transport', amount: 5000, currency: 'KZT' }],
+  shoppingTemplates: [{ id: 'weekly', name: 'На неделю', items: [{ title: 'Хлеб', currency: 'EUR' }, { title: 'Milk', currency: 'USD' }] }],
 };
 let report: Uint8Array;
 
@@ -58,6 +61,8 @@ describe('BeliLog PDF reports', () => {
     expect(restored).toEqual(data);
     expect(restored.transactions).toHaveLength(3);
     expect(restored.transactions[0].items?.[1]).toEqual({ id: 'chicken', title: 'Филе', amount: 9 });
+    expect(restored.categoryBudgets).toEqual(data.categoryBudgets);
+    expect(restored.shoppingTemplates).toEqual(data.shoppingTemplates);
   });
 
   it('paginates long notes, unbroken names and many purchase items', async () => {
@@ -81,6 +86,8 @@ describe('BeliLog PDF reports', () => {
     const empty = await buildPdf(createEmptyData(), { language: 'en', includeBackup: true });
     expect((await PDFDocument.load(empty)).getPageCount()).toBe(1);
     expect((await readPdfBackup(empty)).transactions).toEqual([]);
+    expect(await readPdfBackup(empty)).not.toHaveProperty('categoryBudgets');
+    expect(await readPdfBackup(empty)).not.toHaveProperty('shoppingTemplates');
   }, 30_000);
 
   it('reads a valid attachment from a nested PDF name tree', async () => {

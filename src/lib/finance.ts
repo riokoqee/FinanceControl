@@ -39,6 +39,24 @@ export interface ShoppingItem {
   transactionId?: string;
 }
 
+/** A monthly category limit keeps its own currency when the profile changes. */
+export interface CategoryBudget {
+  id: CategoryId;
+  amount: number;
+  currency: Currency;
+}
+
+export interface ShoppingTemplateItem {
+  title: string;
+  currency: Currency;
+}
+
+export interface ShoppingTemplate {
+  id: string;
+  name: string;
+  items: ShoppingTemplateItem[];
+}
+
 export interface Profile {
   name: string;
   email: string;
@@ -52,11 +70,14 @@ export interface Profile {
 }
 
 export interface AppData {
-  version: 1;
+  /** Version two prevents older open tabs from discarding the optional records. */
+  version: 1 | 2;
   profile: Profile;
   transactions: Transaction[];
   /** Optional so existing version-one backups retain their original shape. */
   shoppingList?: ShoppingItem[];
+  categoryBudgets?: CategoryBudget[];
+  shoppingTemplates?: ShoppingTemplate[];
 }
 
 export const STORAGE_KEY = 'finance-control:data:v1';
@@ -106,6 +127,8 @@ export const DEFAULT_PROFILE: Readonly<Profile> = {
 export const MAX_AMOUNT = 1_000_000_000_000;
 export const MAX_TRANSACTIONS = 50_000;
 export const MAX_BACKUP_LENGTH = 30_000_000;
+export const MAX_SHOPPING_TEMPLATES = 20;
+export const MAX_TEMPLATE_ITEMS = 200;
 const MAX_ITEMS = 200;
 const MAX_AVATAR_LENGTH = 500_000;
 const MAX_SHOPPING_ITEMS = 1_000;
@@ -272,7 +295,7 @@ export function validateBackup(input: unknown): AppData {
     }
   }
 
-  if (!isRecord(data) || data.version !== 1 || !isRecord(data.profile)) {
+  if (!isRecord(data) || (data.version !== 1 && data.version !== 2) || !isRecord(data.profile)) {
     throw new Error('Неподдерживаемый формат резервной копии.');
   }
   const profile = data.profile;
@@ -383,8 +406,49 @@ export function validateBackup(input: unknown): AppData {
     });
   }
 
+  let categoryBudgets: CategoryBudget[] | undefined;
+  if (Object.prototype.hasOwnProperty.call(data, 'categoryBudgets')) {
+    if (!Array.isArray(data.categoryBudgets) || data.categoryBudgets.length > CATEGORIES.length) {
+      throw new Error('Некорректный список лимитов по категориям.');
+    }
+    const categories = new Set<CategoryId>();
+    categoryBudgets = data.categoryBudgets.map((entry: unknown): CategoryBudget => {
+      if (!isRecord(entry) || !isCategory(entry.id) || !isCurrency(entry.currency) ||
+        !validAmount(entry.amount) || parseMoney(String(entry.amount)) !== entry.amount) {
+        throw new Error('Один из лимитов содержит некорректную категорию, валюту или сумму.');
+      }
+      if (categories.has(entry.id)) throw new Error('В резервной копии найдены повторяющиеся лимиты категорий.');
+      categories.add(entry.id);
+      return { id: entry.id, amount: entry.amount, currency: entry.currency };
+    });
+  }
+
+  let shoppingTemplates: ShoppingTemplate[] | undefined;
+  if (Object.prototype.hasOwnProperty.call(data, 'shoppingTemplates')) {
+    if (!Array.isArray(data.shoppingTemplates) || data.shoppingTemplates.length > MAX_SHOPPING_TEMPLATES) {
+      throw new Error('Можно сохранить не больше 20 шаблонов покупок.');
+    }
+    const templateIds = new Set<string>();
+    shoppingTemplates = data.shoppingTemplates.map((entry: unknown): ShoppingTemplate => {
+      if (!isRecord(entry) || !Array.isArray(entry.items) || entry.items.length < 1 || entry.items.length > MAX_TEMPLATE_ITEMS) {
+        throw new Error('В шаблоне должно быть от 1 до 200 товаров.');
+      }
+      const id = readText(entry.id, 'ID шаблона', 128);
+      if (templateIds.has(id)) throw new Error('В резервной копии найдены повторяющиеся ID шаблонов.');
+      templateIds.add(id);
+      return {
+        id,
+        name: readText(entry.name, 'Название шаблона', 60),
+        items: entry.items.map((item: unknown): ShoppingTemplateItem => {
+          if (!isRecord(item) || !isCurrency(item.currency)) throw new Error('Некорректная валюта товара в шаблоне.');
+          return { title: readText(item.title, 'Название товара', 160), currency: item.currency };
+        }),
+      };
+    });
+  }
+
   return {
-    version: 1,
+    version: data.version === 2 || categoryBudgets !== undefined || shoppingTemplates !== undefined ? 2 : 1,
     profile: {
       name: readText(profile.name, 'Имя', 80),
       email: readText(profile.email, 'Электронная почта', 254, true),
@@ -396,6 +460,8 @@ export function validateBackup(input: unknown): AppData {
     },
     transactions,
     ...(shoppingList !== undefined ? { shoppingList } : {}),
+    ...(categoryBudgets !== undefined ? { categoryBudgets } : {}),
+    ...(shoppingTemplates !== undefined ? { shoppingTemplates } : {}),
   };
 }
 

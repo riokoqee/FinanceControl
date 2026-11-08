@@ -1,18 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_AMOUNT, MAX_BACKUP_LENGTH, MAX_TRANSACTIONS, STORAGE_KEY, createEmptyData, type AppData, type Transaction } from './finance';
+import { MAX_AMOUNT, MAX_BACKUP_LENGTH, MAX_TRANSACTIONS, STORAGE_KEY, createEmptyData, type AppData, type CategoryBudget, type ShoppingTemplate, type Transaction } from './finance';
 import {
   CORRUPT_KEY,
   LAST_GOOD_KEY,
   DataConflictError,
   StorageRecoveryError,
   commitStoredData,
+  commitStoredMutation,
   mergeAppData,
+  mergeCategoryBudgetsDraft,
   mergeProfileDraft,
   mergeTransactionDraft,
   parseMoney,
   readStoredData,
   writeStoredData,
 } from './storage';
+import { applyShoppingTemplate, makeShoppingTemplate } from './templates';
 
 const expense = (patch: Partial<Transaction> = {}): Transaction => ({
   id: 'expense', title: 'Groceries', amount: 25, currency: 'EUR', category: 'food', date: '2026-11-03', ...patch,
@@ -29,6 +32,298 @@ function memoryStorage(initial: Record<string, string> = {}) {
     setItem: (key: string, value: string) => { writes.push([key, value]); values.set(key, value); },
   };
 }
+
+describe('mutations recomputed against the latest primary', () => {
+  const template = (): ShoppingTemplate => ({ id: 'weekly', name: 'Weekly', items: [{ title: 'Milk', currency: 'EUR' }] });
+  const baseData = (): AppData => ({ ...data(), version: 2, shoppingTemplates: [template()] });
+  const planned = (id: string, title = 'Milk') => ({ id, title, currency: 'EUR' as const, createdAt: '2026-11-03' });
+
+  it('rejects a template deleted before the storage event reaches this tab', () => {
+    const base = baseData();
+    const remote = { ...base, shoppingTemplates: [] };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    expect(() => commitStoredMutation(base, (fresh) => applyShoppingTemplate(fresh, 'weekly'), storage)).toThrow(/удалён/);
+    expect(storage.writes).toEqual([]);
+    expect(readStoredData(storage).data).toEqual(remote);
+  });
+
+  it('deduplicates against a planned product added before a delayed storage event', () => {
+    const base = baseData();
+    const remote = { ...base, shoppingList: [planned('remote')] };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    const saved = commitStoredMutation(base, (fresh) => applyShoppingTemplate(fresh, 'weekly'), storage);
+    expect(saved.shoppingList).toEqual(remote.shoppingList);
+    expect(saved.transactions).toBe(base.transactions);
+    expect(saved.profile).toBe(base.profile);
+    expect(saved.shoppingTemplates).toBe(base.shoppingTemplates);
+  });
+
+  it('uses the latest template contents and does not restore stale planned products', () => {
+    const base = { ...baseData(), shoppingList: [planned('removed', 'Bread')] };
+    const remote: AppData = {
+      ...base, shoppingList: [], shoppingTemplates: [{ ...template(), items: [{ title: 'Eggs', currency: 'USD' }] }],
+    };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    const saved = commitStoredMutation(base, (fresh) => applyShoppingTemplate(fresh, 'weekly'), storage);
+    expect(saved.shoppingList).toEqual([{ id: expect.any(String), title: 'Eggs', currency: 'USD', createdAt: expect.any(String) }]);
+    expect(saved.shoppingTemplates).toEqual(remote.shoppingTemplates);
+  });
+
+  it('checks the current twentieth template and the current plan when saving a new template', () => {
+    const base = { ...baseData(), shoppingList: [planned('stale', 'Bread')] };
+    const remote = {
+      ...base, shoppingList: [planned('fresh', 'Eggs')],
+      shoppingTemplates: Array.from({ length: 20 }, (_, index) => ({ ...template(), id: String(index) })),
+    };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    const save = (fresh: AppData): AppData => ({ ...fresh, shoppingTemplates: [...(fresh.shoppingTemplates ?? []), makeShoppingTemplate('New', fresh)] });
+    expect(() => commitStoredMutation(base, save, storage)).toThrow(/20/);
+    expect(storage.writes).toEqual([]);
+    const smaller = { ...remote, shoppingTemplates: remote.shoppingTemplates.slice(0, 19) };
+    storage.values.set(STORAGE_KEY, JSON.stringify(smaller));
+    const saved = commitStoredMutation(base, save, storage);
+    expect(saved.shoppingTemplates).toHaveLength(20);
+    expect(saved.shoppingTemplates!.at(-1)!.items).toEqual([{ title: 'Eggs', currency: 'EUR' }]);
+  });
+
+  it('checks the latest list capacity before applying any products', () => {
+    const base = baseData();
+    base.shoppingTemplates![0].items.push({ title: 'Cheese', currency: 'EUR' });
+    const remote = { ...base, shoppingList: Array.from({ length: 999 }, (_, index) => planned(String(index), `Product ${index}`)) };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    expect(() => commitStoredMutation(base, (fresh) => applyShoppingTemplate(fresh, 'weekly'), storage)).toThrow(/1000/);
+    expect(storage.writes).toEqual([]);
+    expect(readStoredData(storage).data.shoppingList).toHaveLength(999);
+  });
+
+  it('recomputes deduplication when a matching product arrives immediately before the write', () => {
+    const base = baseData();
+    const remote = { ...base, shoppingList: [planned('remote')] };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    let reads = 0;
+    let updates = 0;
+    const racing = { ...storage, getItem: (key: string) => {
+      if (key === STORAGE_KEY && ++reads === 2) storage.values.set(key, JSON.stringify(remote));
+      return storage.getItem(key);
+    } };
+    const saved = commitStoredMutation(base, (fresh) => { updates += 1; return applyShoppingTemplate(fresh, 'weekly'); }, racing);
+    expect(updates).toBe(2);
+    expect(saved.shoppingList).toEqual(remote.shoppingList);
+    expect(storage.writes.filter(([key]) => key === STORAGE_KEY)).toHaveLength(1);
+  });
+
+  it('rejects a template removed during a write retry instead of adding its former products', () => {
+    const base = baseData();
+    const remote = { ...base, shoppingTemplates: [] };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    let reads = 0;
+    const racing = { ...storage, getItem: (key: string) => {
+      if (key === STORAGE_KEY && ++reads === 2) storage.values.set(key, JSON.stringify(remote));
+      return storage.getItem(key);
+    } };
+    expect(() => commitStoredMutation(base, (fresh) => applyShoppingTemplate(fresh, 'weekly'), racing)).toThrow(/удалён/);
+    expect(storage.writes).toEqual([]);
+    expect(readStoredData(storage).data).toEqual(remote);
+  });
+
+  it('keeps the recovery guard and validates a fresh mutation before any write', () => {
+    const base = baseData();
+    const update = () => base;
+    const damaged = memoryStorage({ [STORAGE_KEY]: '{broken', [LAST_GOOD_KEY]: JSON.stringify(base) });
+    expect(() => commitStoredMutation(base, update, damaged)).toThrow(StorageRecoveryError);
+    expect(damaged.writes).toEqual([]);
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    expect(() => commitStoredMutation(base, (fresh) => ({ ...fresh, categoryBudgets: [{ id: 'food', amount: -1, currency: 'EUR' }] }), storage)).toThrow();
+    expect(storage.writes).toEqual([]);
+  });
+});
+
+describe('category limit and shopping template persistence', () => {
+  const limits = (): CategoryBudget[] => [{ id: 'food', amount: 200, currency: 'EUR' }, { id: 'transport', amount: 80, currency: 'USD' }];
+  const templates = (): ShoppingTemplate[] => [
+    { id: 'weekly', name: 'Groceries', items: [{ title: 'Bread', currency: 'EUR' }] },
+    { id: 'home', name: 'For home', items: [{ title: 'Soap', currency: 'KZT' }] },
+  ];
+  const extended = (): AppData => ({ ...data(), version: 2, categoryBudgets: limits(), shoppingTemplates: templates() });
+
+  it('keeps optional legacy fields absent until a feature is used', () => {
+    const base = data();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const desired = { ...base, profile: { ...base.profile, name: 'Captain' } };
+    const saved = commitStoredData(base, desired, storage);
+    expect(saved).not.toHaveProperty('categoryBudgets');
+    expect(saved).not.toHaveProperty('shoppingTemplates');
+    expect(mergeAppData(base, copy(base), desired)).toEqual(saved);
+  });
+
+  it('upgrades once on feature creation and retains version two on subsequent saves and merges', () => {
+    const base = data();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const upgraded = commitStoredData(base, { ...base, categoryBudgets: limits() }, storage);
+    expect(upgraded.version).toBe(2);
+    const saved = commitStoredData(upgraded, { ...upgraded, profile: { ...upgraded.profile, name: 'Captain' } }, storage);
+    expect(saved.version).toBe(2);
+    const { categoryBudgets: _limits, ...noFeatures } = saved;
+    expect(commitStoredData(saved, noFeatures, storage).version).toBe(2);
+    expect(mergeAppData(base, { ...base, version: 2 }, { ...base, profile: { ...base.profile, name: 'Captain' } }).version).toBe(2);
+  });
+
+  it('retains unchanged arrays and records on local saves and incoming storage updates', () => {
+    const base = extended();
+    const remote = { ...base, profile: { ...base.profile, name: 'Captain' } };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const saved = commitStoredData(base, remote, storage);
+    expect(saved.categoryBudgets).toBe(base.categoryBudgets);
+    expect(saved.shoppingTemplates).toBe(base.shoppingTemplates);
+    const incoming = readStoredData(storage, base).data;
+    expect(incoming.categoryBudgets).toBe(base.categoryBudgets);
+    expect(incoming.shoppingTemplates).toBe(base.shoppingTemplates);
+    const changed = commitStoredData(saved, { ...saved, categoryBudgets: [{ ...saved.categoryBudgets![0], amount: 250 }, saved.categoryBudgets![1]] }, storage);
+    expect(changed.categoryBudgets![0].amount).toBe(250);
+    expect(changed.categoryBudgets![1]).toBe(saved.categoryBudgets![1]);
+    expect(changed.shoppingTemplates).toBe(saved.shoppingTemplates);
+  });
+
+  it('merges independent limit changes and profile edits across tabs', () => {
+    const base = extended();
+    const remote = copy(base);
+    remote.categoryBudgets![0].amount = 250;
+    const desired = copy(base);
+    desired.categoryBudgets![1].amount = 100;
+    desired.profile.language = 'en';
+    const saved = commitStoredData(base, desired, memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) }));
+    expect(saved.categoryBudgets).toEqual([{ id: 'food', amount: 250, currency: 'EUR' }, { id: 'transport', amount: 100, currency: 'USD' }]);
+    expect(saved.profile.language).toBe('en');
+    expect(saved.shoppingTemplates).toEqual(base.shoppingTemplates);
+  });
+
+  it('rejects same-limit conflicts without writing either stored copy', () => {
+    const base = extended();
+    const remote = copy(base);
+    const desired = copy(base);
+    remote.categoryBudgets![0].amount = 250;
+    desired.categoryBudgets![0].amount = 300;
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    expect(() => commitStoredData(base, desired, storage)).toThrow(DataConflictError);
+    expect(storage.writes).toEqual([]);
+    expect(readStoredData(storage).data).toEqual(remote);
+  });
+
+  it('never combines a stale limit amount with a currency changed by another tab', () => {
+    const base = extended();
+    const remote = copy(base);
+    remote.categoryBudgets![0].currency = 'USD';
+    const desired = copy(base);
+    desired.categoryBudgets![0].amount = 300;
+    expect(() => mergeAppData(base, remote, desired)).toThrow(DataConflictError);
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    expect(() => commitStoredData(base, desired, storage)).toThrow(DataConflictError);
+    expect(storage.writes).toEqual([]);
+    expect(readStoredData(storage).data.categoryBudgets).toEqual(remote.categoryBudgets);
+  });
+
+  it('rejects a currency race detected immediately before committing a limit amount', () => {
+    const base = extended();
+    const remote = copy(base);
+    remote.categoryBudgets![0].currency = 'USD';
+    const desired = copy(base);
+    desired.categoryBudgets![0].amount = 300;
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    let reads = 0;
+    const racing = { ...storage, getItem: (key: string) => {
+      if (key === STORAGE_KEY && ++reads === 2) storage.values.set(key, JSON.stringify(remote));
+      return storage.getItem(key);
+    } };
+    expect(() => commitStoredData(base, desired, racing)).toThrow(DataConflictError);
+    expect(storage.writes).toEqual([]);
+    expect(readStoredData(storage).data.categoryBudgets).toEqual(remote.categoryBudgets);
+  });
+
+  it('accepts identical concurrent limits without inventing a conflict', () => {
+    const base = extended();
+    const remote = copy(base);
+    remote.categoryBudgets![0] = { id: 'food', amount: 300, currency: 'USD' };
+    expect(mergeAppData(base, remote, copy(remote)).categoryBudgets).toEqual(remote.categoryBudgets);
+    expect(mergeCategoryBudgetsDraft(base.categoryBudgets!, remote.categoryBudgets!, copy(remote.categoryBudgets!))).toEqual(remote.categoryBudgets);
+  });
+
+  it('merges simultaneous first feature use without dropping another tab records', () => {
+    const base = data();
+    const remote = { ...base, categoryBudgets: [limits()[0]], shoppingTemplates: [templates()[0]] };
+    const desired = { ...base, categoryBudgets: [limits()[1]], shoppingTemplates: [templates()[1]] };
+    const merged = mergeAppData(base, remote, desired);
+    expect(merged.categoryBudgets).toEqual(limits());
+    expect(merged.shoppingTemplates).toEqual(templates());
+    expect(mergeAppData(base, remote, { ...base, profile: { ...base.profile, name: 'Captain' } })).toMatchObject({ categoryBudgets: remote.categoryBudgets, shoppingTemplates: remote.shoppingTemplates });
+  });
+
+  it('preserves template edits and deletions during unrelated profile and expense saves', () => {
+    const base = extended();
+    const remote = copy(base);
+    remote.shoppingTemplates![0].name = 'Market';
+    remote.shoppingTemplates![0].items.push({ title: 'Milk', currency: 'USD' });
+    remote.shoppingTemplates!.splice(1, 1);
+    const desired = copy(base);
+    desired.profile.name = 'Captain';
+    desired.transactions[0].note = 'Dinner';
+    const saved = commitStoredData(base, desired, memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) }));
+    expect(saved.shoppingTemplates).toEqual(remote.shoppingTemplates);
+    expect(saved.profile.name).toBe('Captain');
+    expect(saved.transactions[0].note).toBe('Dinner');
+  });
+
+  it('merges independent template fields and rejects competing item lists or stale deletions', () => {
+    const base = extended();
+    const remote = copy(base);
+    remote.shoppingTemplates![0].name = 'Market';
+    const desired = copy(base);
+    desired.shoppingTemplates![0].items.push({ title: 'Milk', currency: 'USD' });
+    const merged = mergeAppData(base, remote, desired);
+    expect(merged.shoppingTemplates![0]).toEqual({ ...desired.shoppingTemplates![0], name: 'Market' });
+    remote.shoppingTemplates![0].items.push({ title: 'Eggs', currency: 'EUR' });
+    expect(() => mergeAppData(base, remote, desired)).toThrow(DataConflictError);
+    expect(() => mergeAppData(base, remote, { ...base, shoppingTemplates: base.shoppingTemplates!.slice(1) })).toThrow(DataConflictError);
+  });
+
+  it('keeps stable record ordering on the fast path and records explicit feature removal', () => {
+    const base = extended();
+    const desired = { ...base, categoryBudgets: [...limits()].reverse(), shoppingTemplates: [...templates()].reverse() };
+    const saved = commitStoredData(base, desired, memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) }));
+    expect(saved.categoryBudgets).toEqual(base.categoryBudgets);
+    expect(saved.shoppingTemplates).toEqual(base.shoppingTemplates);
+    expect(saved).toEqual(mergeAppData(base, copy(base), desired));
+    const { categoryBudgets: _limits, shoppingTemplates: _templates, ...removed } = base;
+    const cleared = commitStoredData(base, removed, memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) }));
+    expect(cleared.categoryBudgets).toEqual([]);
+    expect(cleared.shoppingTemplates).toEqual([]);
+    expect(cleared).toEqual(mergeAppData(base, copy(base), removed));
+  });
+
+  it('rebases a category modal and preserves other category additions and removals', () => {
+    const base = limits();
+    const current: CategoryBudget[] = [base[0], { id: 'home', amount: 100, currency: 'EUR' }];
+    const draft = [{ ...base[0], amount: 300 }, base[1]];
+    expect(mergeCategoryBudgetsDraft(base, current, draft)).toEqual([{ id: 'food', amount: 300, currency: 'EUR' }, current[1]]);
+    expect(base).toEqual(limits());
+  });
+
+  it('rejects independently changed amount and currency for the same category in a stale modal', () => {
+    const base = limits();
+    const current: CategoryBudget[] = [{ ...base[0], currency: 'KZT' }, base[1]];
+    const draft = [{ ...base[0], amount: 300 }, base[1]];
+    expect(() => mergeCategoryBudgetsDraft(base, current, draft)).toThrow(DataConflictError);
+    expect(base).toEqual(limits());
+    expect(current[0]).toEqual({ id: 'food', amount: 200, currency: 'KZT' });
+  });
+
+  it('rejects conflicting or invalid category modal changes without validating unrelated history', () => {
+    const base = limits();
+    expect(() => mergeCategoryBudgetsDraft(base, [{ ...base[0], amount: 250 }], [{ ...base[0], amount: 300 }])).toThrow(DataConflictError);
+    expect(() => mergeCategoryBudgetsDraft(base, base.slice(1), [{ ...base[0], amount: 300 }, base[1]])).toThrow(DataConflictError);
+    expect(() => mergeCategoryBudgetsDraft(base, base, [{ ...base[0], amount: 0.001 }])).toThrow();
+    expect(mergeCategoryBudgetsDraft(base, base, [])).toEqual([]);
+  });
+});
 
 describe('single-commit persistence', () => {
   it('keeps equal ledger and shopping arrays stable on a profile-only save', () => {
