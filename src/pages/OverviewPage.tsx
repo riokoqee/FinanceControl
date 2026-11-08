@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import type { ReactNode } from "react";
 import {
   ArrowDownLeft,
@@ -28,6 +28,7 @@ import StreakBounty from "../components/StreakBounty";
 import type { BountyCelebration } from "../components/StreakBounty";
 import ExpenseChart from "../components/ExpenseChart";
 import TransactionTable from "../components/TransactionTable";
+import BudgetState from "../components/BudgetState";
 import "../components/CategoryBudgetsDialog.css";
 
 const NO_CATEGORY_BUDGETS: CategoryBudget[] = [];
@@ -42,6 +43,17 @@ const categoryColors: Record<CategoryId, string> = {
   health: "var(--chart-health)",
   other: "var(--chart-other)",
 };
+const categoryPatterns: Record<CategoryId, string> = {
+  food: 'M0 2H8 M0 6H8', transport: 'M2 0V8 M6 0V8',
+  home: 'M0 4H8 M4 0V8', entertainment: 'M0 0L8 8 M8 0L0 8',
+  health: 'M2 2h1 M6 6h1', shopping: 'M-2 2L2-2 M0 8L8 0 M6 10L10 6',
+  other: 'M0 0L8 8 M-4 4L4 12 M4-4L12 4',
+};
+function CategorySwatch({ category, patternId }: { category: CategoryId; patternId: string }) {
+  return <span className="legend-dot" aria-hidden="true"><svg viewBox="0 0 8 8">
+    <rect width="8" height="8" fill={`url(#${patternId}-${category})`} />
+  </svg></span>;
+}
 
 interface OverviewPageProps {
   data: AppData;
@@ -90,6 +102,7 @@ export default function OverviewPage({
   emptyState,
 }: OverviewPageProps) {
   const tr = (text: string) => translate(language, text);
+  const patternId = useId().replace(/:/g, '');
   const today = useLocalCalendarDay();
   const {
     transactions,
@@ -206,7 +219,7 @@ export default function OverviewPage({
             <span />
           </div>
         </div>
-        <div className="stat-card">
+        <div className="stat-card stat-card-budget" data-state={budget ? progress >= 100 ? 'over' : progress >= 80 ? 'warning' : 'normal' : undefined}>
           <div className="stat-label">
             {budget ? tr("Осталось в бюджете") : tr("Месячный бюджет")}
             <span className="stat-icon">
@@ -232,6 +245,7 @@ export default function OverviewPage({
                   {Math.round(progress)}
                   {tr("% использовано")}
                 </span>
+                <BudgetState state={progress >= 100 ? 'over' : progress >= 80 ? 'warning' : 'normal'} language={language} />
               </>
             ) : (
               <button className="inline-link" onClick={() => onProfile()}>
@@ -318,6 +332,13 @@ export default function OverviewPage({
                   : tr("Пока нет расходов по категориям")
               }
             >
+              <defs>
+                {CATEGORIES.map((category) => <pattern key={category.id} id={`${patternId}-${category.id}`}
+                  width="8" height="8" patternUnits="userSpaceOnUse">
+                  <rect width="8" height="8" fill={categoryColors[category.id]} />
+                  <path d={categoryPatterns[category.id]} stroke="var(--surface)" strokeWidth="1" fill="none" opacity="0.65" />
+                </pattern>)}
+              </defs>
               <circle
                 cx="90"
                 cy="90"
@@ -337,7 +358,7 @@ export default function OverviewPage({
                     cy="90"
                     r="71"
                     fill="none"
-                    stroke={categoryColors[c.id]}
+                    stroke={`url(#${patternId}-${c.id})`}
                     strokeWidth="17"
                     strokeDasharray={`${Math.max(0, (c.value / total) * 446.1 - 5)} ${446.1}`}
                     strokeDashoffset={-offset}
@@ -373,7 +394,7 @@ export default function OverviewPage({
                 <div className={`category-budget-item category-budget-${limit.state}`} key={limit.id}>
                   <div className="category-budget-caption">
                     <span className="category-budget-name">
-                      <span className="legend-dot" style={{ background: categoryColors[limit.id] }} />
+                      <CategorySwatch category={limit.id} patternId={patternId} />
                       <span>{label}</span>
                     </span>
                     <span className="category-budget-percent">{Math.round(limit.percent)}%</span>
@@ -385,6 +406,7 @@ export default function OverviewPage({
                   </div>
                   <div className="category-budget-amounts">
                     <span>{amounts}</span>
+                    <BudgetState state={limit.state} language={language} />
                     {limit.state === "over" && <span className="category-budget-overrun">
                       {language === "en" ? "Over by " : "Сверх "}{formatMoney(-limit.remaining, limit.currency, language)}
                     </span>}
@@ -395,10 +417,7 @@ export default function OverviewPage({
             {unbudgetedCategories.length ? (
               unbudgetedCategories.slice(0, 4).map((c) => (
                 <div className="legend-row" key={c.id}>
-                  <span
-                    className="legend-dot"
-                    style={{ background: categoryColors[c.id] }}
-                  />
+                  <CategorySwatch category={c.id} patternId={patternId} />
                   <span className="legend-name">{tr(c.label)}</span>
                   <span className="legend-value">
                     {formatMoney(c.value, currency, language)}
@@ -456,7 +475,7 @@ export default function OverviewPage({
             emptyState
           )}
         </section>
-        <div className="budget-panel">
+        <div className="budget-panel" data-state={budget ? progress >= 100 ? 'over' : progress >= 80 ? 'warning' : 'normal' : undefined}>
           <span className="budget-icon">
             <Wallet size={21} strokeWidth={1.6} />
           </span>
@@ -482,6 +501,7 @@ export default function OverviewPage({
                   ? `${tr("Лимит превышен на")} ${formatMoney(total - budget, currency, language)}`
                   : `${tr("В запасе")} ${formatMoney(remaining, currency, language)}`}
               </span>
+              <BudgetState state={progress >= 100 ? 'over' : progress >= 80 ? 'warning' : 'normal'} language={language} />
             </>
           )}
           <button className="budget-link" onClick={() => onProfile()}>
