@@ -210,6 +210,35 @@ try {
     }, { route: 'profile' });
   }
 
+  const longText = seed();
+  longText.profile.name = 'N'.repeat(80);
+  longText.transactions[0].title = 'T'.repeat(160);
+  longText.transactions[0].note = 'n'.repeat(2000);
+  await test('valid long imported names, titles and notes remain fully editable', async (page) => {
+    const name = page.locator('.profile-form input[required]');
+    await name.press('End'); await name.press('Backspace'); await name.press('X');
+    assert.equal(await name.inputValue(), `${'N'.repeat(79)}X`);
+    await page.locator('.topbar .avatar').focus();
+    assert.equal((await read(page)).profile.name, `${'N'.repeat(79)}X`);
+    await page.locator('a[href="#tracker"]:visible').first().click();
+    await page.locator('.transaction-open').waitFor();
+    await page.locator('.row-actions button').first().click();
+    const title = page.locator('.modal .form-grid input').first();
+    await title.waitFor();
+    await title.press('End'); await title.press('Backspace'); await title.press('X');
+    const note = page.locator('.modal textarea');
+    await note.press('Control+End'); await note.press('Backspace'); await note.press('X');
+    assert.equal(await title.inputValue(), `${'T'.repeat(159)}X`);
+    assert.equal(await note.inputValue(), `${'n'.repeat(1999)}X`);
+    await page.locator('.dialog-footer button[type="submit"]').click();
+    const saved = await read(page);
+    assert.equal(saved.transactions[0].title, `${'T'.repeat(159)}X`);
+    assert.equal(saved.transactions[0].note, `${'n'.repeat(1999)}X`);
+    await page.reload();
+    await page.locator('.transaction-open').waitFor();
+    assert.deepEqual(await read(page), saved);
+  }, { route: 'profile', raw: JSON.stringify(longText) });
+
   const highBudget = seed(); highBudget.profile.monthlyBudget = 3_000_000_000;
   await test('currency conversion above budget limit is rejected before mutation', async (page) => {
     await page.locator('a[href="#profile"]:visible').first().click();

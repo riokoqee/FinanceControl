@@ -182,7 +182,7 @@ export default function ProfilePage({
             <input
               className="form-input"
               required
-              maxLength={60}
+              maxLength={80}
               value={profile.name}
               onChange={(e) =>
                 setProfile((p) => ({ ...p, name: e.target.value }))
@@ -392,7 +392,7 @@ export default function ProfilePage({
             {tr("Удалить все данные")}
           </button>
           <p>
-            {tr("Удаляет профиль, расходы и список покупок из этого браузера.")}
+            {tr("Удаляет все данные BeliLog из этого браузера.")}
           </p>
         </div>
       </div>

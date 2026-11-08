@@ -128,7 +128,7 @@ export default function TransactionDialog({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
-            maxLength={120}
+            maxLength={160}
           />
         </label>
         <label className="field amount-field">
@@ -197,7 +197,7 @@ export default function TransactionDialog({
           <textarea
             className="form-input"
             rows={2}
-            maxLength={500}
+            maxLength={2000}
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />

@@ -37,12 +37,18 @@ import {
   todayString,
   validateBackup,
 } from "./lib/finance";
-import type { AppData, Currency, Transaction } from "./lib/finance";
+import type {
+  AppData,
+  CategoryBudget,
+  Currency,
+  Transaction,
+} from "./lib/finance";
 
 import { useProfileDraft } from "./lib/useProfileDraft";
 import { usePersistentData } from "./lib/usePersistentData";
 import {
   DataConflictError,
+  mergeCategoryBudgetsDraft,
   mergeProfileDraft,
   mergeTransactionDraft,
 } from "./lib/storage";
@@ -63,6 +69,10 @@ const TrackerPage = lazy(() => import("./pages/TrackerPage"));
 const EntryDetails = lazy(() => import("./components/EntryDetails"));
 const AvatarCropper = lazy(() => import("./components/AvatarCropper"));
 const ShoppingList = lazy(() => import("./components/ShoppingList"));
+const CategoryBudgetsDialog = lazy(
+  () => import("./components/CategoryBudgetsDialog"),
+);
+import { makeShoppingTemplate, applyShoppingTemplate } from "./lib/templates";
 import type { ShoppingPurchaseConfirmation } from "./components/ShoppingList";
 import {
   addShoppingItem,
@@ -118,6 +128,7 @@ export default function App() {
   const {
     data,
     commit,
+    commitFresh,
     status: storageStatus,
     error: storageError,
     lastError,
@@ -126,6 +137,11 @@ export default function App() {
     !storageError && (storageStatus === "ready" || storageStatus === "empty");
   const setData = (change: AppData | ((value: AppData) => AppData)) => {
     const next = commit(change);
+    if (next) latest.current = { ...latest.current, data: next };
+    return next;
+  };
+  const mutateData = (change: (value: AppData) => AppData) => {
+    const next = commitFresh(change);
     if (next) latest.current = { ...latest.current, data: next };
     return next;
   };
@@ -140,6 +156,7 @@ export default function App() {
   >(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [pendingImport, setPendingImport] = useState<AppData | null>(null);
+  const [categoryBudgetsOpen, setCategoryBudgetsOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [avatarSource, setAvatarSource] = useState<{
     file?: File;
@@ -590,6 +607,51 @@ export default function App() {
   function exportBackup() {
     void downloadPdf(data.transactions, true);
   }
+  function saveCategoryBudgets(
+    base: CategoryBudget[],
+    next: CategoryBudget[],
+  ): boolean {
+    const saved = setData((current) => ({
+      ...current,
+      categoryBudgets: mergeCategoryBudgetsDraft(
+        base,
+        current.categoryBudgets ?? [],
+        next,
+      ),
+    }));
+    if (!saved) return false;
+    setToast({ message: "Лимиты сохранены" });
+    return true;
+  }
+  function saveTemplate(name: string): boolean {
+    const saved = mutateData((current) => ({
+      ...current,
+      shoppingTemplates: [
+        ...(current.shoppingTemplates ?? []),
+        makeShoppingTemplate(name, current),
+      ],
+    }));
+    if (!saved) return false;
+    setToast({ message: "Шаблон сохранён" });
+    return true;
+  }
+  function applyTemplate(id: string): boolean {
+    const saved = mutateData((current) => applyShoppingTemplate(current, id));
+    if (!saved) return false;
+    setToast({ message: "Шаблон добавлен в список" });
+    return true;
+  }
+  function deleteTemplate(id: string): boolean {
+    const saved = mutateData((current) => ({
+      ...current,
+      shoppingTemplates: (current.shoppingTemplates ?? []).filter(
+        (template) => template.id !== id,
+      ),
+    }));
+    if (!saved) return false;
+    setToast({ message: "Шаблон удалён" });
+    return true;
+  }
   function exportReport() {
     const report =
       page === "tracker" && search !== deferredSearch
@@ -694,6 +756,8 @@ export default function App() {
     if (
       data.transactions.length ||
       data.shoppingList?.length ||
+      data.categoryBudgets?.length ||
+      data.shoppingTemplates?.length ||
       data.profile.name !== "Пользователь" ||
       data.profile.email ||
       data.profile.avatar ||
@@ -1042,6 +1106,7 @@ export default function App() {
                       showDemoBanner={showDemoBanner}
                       onDismissDemo={() => setShowDemoBanner(false)}
                       onDemo={startDemo}
+                      onConfigureBudgets={() => setCategoryBudgetsOpen(true)}
                       onAddExpense={() => setModal("new")}
                       onProfile={() => navigate("profile")}
                       onTracker={() => navigate("tracker")}
@@ -1065,6 +1130,10 @@ export default function App() {
                       defaultCurrency={currency}
                       language={language}
                       onAdd={addPlannedItem}
+                      templates={data.shoppingTemplates ?? []}
+                      onSaveTemplate={saveTemplate}
+                      onApplyTemplate={applyTemplate}
+                      onDeleteTemplate={deleteTemplate}
                       onPriceChange={savePlannedPrice}
                       onUpdate={updatePlannedItem}
                       onRemove={removePlannedItem}
@@ -1153,6 +1222,25 @@ export default function App() {
             </div>
           </main>
         </div>
+        {categoryBudgetsOpen && (
+          <Modal
+            label={tr("Лимиты категорий")}
+            className="category-budgets-modal"
+            onClose={() => setCategoryBudgetsOpen(false)}
+          >
+            <FeatureBoundary language={language}>
+              <Suspense fallback={<LoadingState />}>
+                <CategoryBudgetsDialog
+                  budgets={data.categoryBudgets ?? []}
+                  defaultCurrency={currency}
+                  language={language}
+                  onSave={saveCategoryBudgets}
+                  onClose={() => setCategoryBudgetsOpen(false)}
+                />
+              </Suspense>
+            </FeatureBoundary>
+          </Modal>
+        )}
         {avatarSource && (
           <Modal
             className="avatar-crop-modal"
@@ -1230,7 +1318,7 @@ export default function App() {
             </p>
             <p className="field-hint">
               {tr(
-                "Восстановить всё заменит текущие расходы, список покупок, профиль и настройки.",
+                "Восстановить всё заменит все данные BeliLog содержимым копии.",
               )}
             </p>
             <div className="import-summary">
@@ -1240,6 +1328,18 @@ export default function App() {
                 <span>
                   {" "}
                   · {tr("Список покупок")}: {pendingImport.shoppingList!.length}
+                </span>
+              )}
+              {Boolean(pendingImport.categoryBudgets?.length) && (
+                <span>
+                  {" "}
+                  · {tr("Лимиты")}: {pendingImport.categoryBudgets!.length}
+                </span>
+              )}
+              {Boolean(pendingImport.shoppingTemplates?.length) && (
+                <span>
+                  {" "}
+                  · {tr("Шаблоны")}: {pendingImport.shoppingTemplates!.length}
                 </span>
               )}
             </div>
@@ -1310,10 +1410,10 @@ export default function App() {
                   )
                 : confirmation === "reset"
                   ? tr(
-                      "Все расходы, список покупок и настройки будут удалены из этого браузера. Перед удалением можно скачать резервную копию.",
+                      "Все данные BeliLog будут удалены из этого браузера. Перед удалением можно скачать резервную копию.",
                     )
                   : tr(
-                      "Демо заменит текущие расходы, список покупок и настройки. Скачайте копию, чтобы вернуться к своим данным.",
+                      "Демо заменит все данные BeliLog. Скачайте копию, чтобы вернуться к своим данным.",
                     )}
             </p>
             <div className="confirmation-backup">

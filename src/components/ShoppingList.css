@@ -12,6 +12,8 @@
 .shopping-counts strong { color: var(--ink); font-weight: 700; }
 .shopping-counts svg { color: var(--green); }
 .shopping-count-dot { width: 7px; height: 7px; border: 1px solid var(--muted); border-radius: 50%; }
+.shopping-templates-button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; margin: -7px -8px; padding: 9px 11px; border: 1px solid transparent; border-radius: 7px; color: var(--subtle); background: transparent; font-size: 11px; font-weight: 650; }
+.shopping-templates-button:hover { border-color: var(--line); color: var(--ink); background: var(--surface); }
 .shopping-auto { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; }
 .shopping-auto svg { color: var(--green); }
 .shopping-filters { display: flex; gap: 6px; padding: 15px 24px 10px; }

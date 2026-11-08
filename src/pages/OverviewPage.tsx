@@ -1,18 +1,19 @@
+import { useMemo } from "react";
 import type { ReactNode } from "react";
 import {
   ArrowDownLeft,
   ArrowRight,
   ArrowUpRight,
   CircleHelp,
-  ShoppingBag,
   Sparkles,
   TrendingUp,
   Wallet,
   X,
 } from "lucide-react";
-import { formatMoney, RATE_LABEL } from "../lib/finance";
+import { CATEGORIES, formatMoney, RATE_LABEL } from "../lib/finance";
 import type {
   AppData,
+  CategoryBudget,
   CategoryId,
   Currency,
   Language,
@@ -22,10 +23,15 @@ import type { summarizeExpenses } from "../lib/expenses";
 import { plural } from "../lib/display";
 import { translate } from "../lib/i18n";
 import { useLocalCalendarDay } from "../lib/useStreakStats";
+import { summarizeCategoryBudgets } from "../lib/budgets";
 import StreakBounty from "../components/StreakBounty";
 import type { BountyCelebration } from "../components/StreakBounty";
 import ExpenseChart from "../components/ExpenseChart";
 import TransactionTable from "../components/TransactionTable";
+import "../components/CategoryBudgetsDialog.css";
+
+const NO_CATEGORY_BUDGETS: CategoryBudget[] = [];
+const categoryLabels = new Map(CATEGORIES.map((category) => [category.id, category.label]));
 
 const categoryColors: Record<CategoryId, string> = {
   food: "#C35D4C",
@@ -54,6 +60,7 @@ interface OverviewPageProps {
   onShowAll: () => void;
   onProfile: () => void;
   onTracker: () => void;
+  onConfigureBudgets: () => void;
   onOpen: (id: string) => void;
   onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
@@ -76,6 +83,7 @@ export default function OverviewPage({
   onShowAll,
   onProfile,
   onTracker,
+  onConfigureBudgets,
   onOpen,
   onEdit,
   onDelete,
@@ -90,6 +98,15 @@ export default function OverviewPage({
     categories,
     recent: sortedTransactions,
   } = summary;
+  const categoryBudgets = data.categoryBudgets ?? NO_CATEGORY_BUDGETS;
+  const budgetProgress = useMemo(
+    () => summarizeCategoryBudgets(transactions, categoryBudgets, month),
+    [transactions, categoryBudgets, month],
+  );
+  const unbudgetedCategories = useMemo(() => {
+    const configured = new Set(categoryBudgets.map((item) => item.id));
+    return categories.filter((category) => !configured.has(category.id));
+  }, [categories, categoryBudgets]);
   const budget = data.profile.monthlyBudget;
   const progress = budget ? (total / budget) * 100 : 0;
   const remaining = Math.max(0, budget - total);
@@ -286,9 +303,9 @@ export default function OverviewPage({
             <div>
               <h2>{tr("Куда уходят деньги")}</h2>
             </div>
-            <span className="muted-icon">
-              <ShoppingBag size={18} />
-            </span>
+            <button className="section-link category-limits-button" onClick={onConfigureBudgets}>
+              {language === "en" ? "Limits" : "Лимиты"}
+            </button>
           </div>
           <div className="donut-wrap">
             <svg
@@ -349,8 +366,34 @@ export default function OverviewPage({
             </div>
           </div>
           <div className="legend-list">
-            {categories.length ? (
-              categories.slice(0, 4).map((c) => (
+            {budgetProgress.map((limit) => {
+              const label = tr(categoryLabels.get(limit.id)!);
+              const amounts = `${formatMoney(limit.spent, limit.currency, language)} / ${formatMoney(limit.amount, limit.currency, language)}`;
+              return (
+                <div className={`category-budget-item category-budget-${limit.state}`} key={limit.id}>
+                  <div className="category-budget-caption">
+                    <span className="category-budget-name">
+                      <span className="legend-dot" style={{ background: categoryColors[limit.id] }} />
+                      <span>{label}</span>
+                    </span>
+                    <span className="category-budget-percent">{Math.round(limit.percent)}%</span>
+                  </div>
+                  <div className="category-budget-track" role="progressbar" aria-label={`${label}: ${language === "en" ? "monthly limit" : "лимит на месяц"}`}
+                    aria-valuemin={0} aria-valuemax={100} aria-valuenow={limit.progress}
+                    aria-valuetext={`${amounts}; ${Math.round(limit.percent)}%`}>
+                    <span style={{ width: `${limit.progress}%` }} />
+                  </div>
+                  <div className="category-budget-amounts">
+                    <span>{amounts}</span>
+                    {limit.state === "over" && <span className="category-budget-overrun">
+                      {language === "en" ? "Over by " : "Сверх "}{formatMoney(-limit.remaining, limit.currency, language)}
+                    </span>}
+                  </div>
+                </div>
+              );
+            })}
+            {unbudgetedCategories.length ? (
+              unbudgetedCategories.slice(0, 4).map((c) => (
                 <div className="legend-row" key={c.id}>
                   <span
                     className="legend-dot"
@@ -365,17 +408,17 @@ export default function OverviewPage({
                   </span>
                 </div>
               ))
-            ) : (
+            ) : budgetProgress.length ? null : (
               <p className="category-placeholder">{tr("Пока нет расходов")}</p>
             )}
-            {categories.length > 4 && (
+            {unbudgetedCategories.length > 4 && (
               <button
                 className="inline-link more-categories"
                 onClick={() => onTracker()}
               >
-                {tr("Ещё")} {categories.length - 4}{" "}
+                {tr("Ещё")} {unbudgetedCategories.length - 4}{" "}
                 {plural(
-                  categories.length - 4,
+                  unbudgetedCategories.length - 4,
                   tr("категория"),
                   tr("категории"),
                   tr("категорий"),

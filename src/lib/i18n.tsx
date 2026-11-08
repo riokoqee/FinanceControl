@@ -3,6 +3,20 @@ import type { ReactNode } from "react";
 import type { Language } from "./finance";
 
 const english: Readonly<Record<string, string>> = {
+  "Удаляет все данные BeliLog из этого браузера.": "Deletes all BeliLog data from this browser.",
+  "Лимиты категорий": "Category limits",
+  "Лимиты": "Limits",
+  "Шаблоны": "Templates",
+  "Лимиты сохранены": "Limits saved",
+  "Шаблон сохранён": "Template saved",
+  "Шаблон добавлен в список": "Template added to the list",
+  "Шаблон удалён": "Template deleted",
+  "Можно сохранить не больше 20 шаблонов.": "You can save up to 20 templates.",
+  "В шаблоне должно быть от 1 до 200 товаров.": "A template must contain 1–200 items.",
+  "Шаблон удалён. Откройте актуальный список.": "The template was deleted. Open the current list.",
+  "Восстановить всё заменит все данные BeliLog содержимым копии.": "Restore everything replaces all BeliLog data with this backup.",
+  "Все данные BeliLog будут удалены из этого браузера. Перед удалением можно скачать резервную копию.": "All BeliLog data will be removed from this browser. You can download a backup first.",
+  "Демо заменит все данные BeliLog. Скачайте копию, чтобы вернуться к своим данным.": "The demo replaces all BeliLog data. Download a backup to return to your data.",
   "Автосохранение": "Autosave",
   "Данные": "Data",
   "Данные хранятся в браузере. Переносите их с PDF-копией.": "Stored in this browser. Use a PDF backup to transfer data.",

@@ -1,10 +1,15 @@
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Check, CheckCheck, ListChecks, Plus, Trash2 } from "lucide-react";
+import { Check, CheckCheck, CopyPlus, ListChecks, Plus, Trash2 } from "lucide-react";
 import { CURRENCIES, formatMoney } from "../lib/finance";
-import type { Currency, Language, ShoppingItem, Transaction } from "../lib/finance";
+import type { Currency, Language, ShoppingItem, ShoppingTemplate, Transaction } from "../lib/finance";
 import { parseShoppingPrice } from "../lib/shopping";
+import FeatureBoundary from "./FeatureBoundary";
+import LoadingState from "./LoadingState";
+import Modal from "./Modal";
 import "./ShoppingList.css";
+
+const ShoppingTemplatesDialog = lazy(() => import("./ShoppingTemplatesDialog"));
 
 export interface ShoppingPurchaseConfirmation {
   amount: number;
@@ -24,6 +29,10 @@ interface ShoppingListProps {
   onUpdate: (id: string, patch: { title?: string; currency?: Currency }, base?: Transaction | null) => boolean;
   onRemove: (id: string) => boolean;
   onConfirm: (id: string, purchase: ShoppingPurchaseConfirmation) => boolean;
+  templates: ShoppingTemplate[];
+  onSaveTemplate: (name: string) => boolean;
+  onApplyTemplate: (id: string) => boolean;
+  onDeleteTemplate: (id: string) => boolean;
 }
 
 const copy = {
@@ -60,6 +69,8 @@ const copy = {
     confirm: "Подтвердить покупку",
     title: "Название продукта",
     list: "Продукты в списке покупок",
+    templates: "Шаблоны",
+    draftError: "Сначала сохраните изменения товара.",
   },
   en: {
     heading: "Shopping list",
@@ -94,30 +105,34 @@ const copy = {
     confirm: "Confirm purchase",
     title: "Product name",
     list: "Shopping list products",
+    templates: "Templates",
+    draftError: "Save the item changes first.",
   },
 };
 
 type Filter = "all" | "pending" | "purchased";
 type SaveStatus = "idle" | "saving" | "saved" | "failed";
-type RegisterFlush = (id: string, flush: (() => void) | null) => void;
+type RegisterFlush = (id: string, flush: (() => boolean) | null) => void;
 const SAVE_DELAY = 600;
 const INITIAL_ROWS = 50;
 
 export default function ShoppingList({
   items, transactions, defaultCurrency, language, onAdd, onPriceChange, onUpdate, onRemove, onConfirm,
+  templates, onSaveTemplate, onApplyTemplate, onDeleteTemplate,
 }: ShoppingListProps) {
   const text = copy[language];
   const [title, setTitle] = useState("");
   const [currency, setCurrency] = useState(defaultCurrency);
-  const [error, setError] = useState<"name" | "save" | null>(null);
+  const [error, setError] = useState<"name" | "save" | "draft" | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [visibleLimit, setVisibleLimit] = useState(INITIAL_ROWS);
   const [locallyAddedIds, setLocallyAddedIds] = useState<Set<string>>(() => new Set());
   const beforeAdd = useRef<{ ids: Set<string>; title: string; currency: Currency } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const addId = useId();
-  const flushers = useRef(new Map<string, () => void>());
+  const flushers = useRef(new Map<string, () => boolean>());
   const registerFlush = useCallback<RegisterFlush>((id, flush) => {
     if (flush) flushers.current.set(id, flush);
     else flushers.current.delete(id);
@@ -211,6 +226,37 @@ export default function ShoppingList({
     return true;
   }, [onConfirm]);
 
+  function applyTemplate(id: string) {
+    if (!onApplyTemplate(id)) return false;
+    setFilter("all");
+    setVisibleLimit(INITIAL_ROWS);
+    setLocallyAddedIds(new Set());
+    setTemplatesOpen(false);
+    // Modal first restores its trigger; applying a plan then returns to adding products.
+    requestAnimationFrame(() => inputRef.current?.focus());
+    return true;
+  }
+
+  function openTemplates() {
+    let blocked: string | undefined;
+    for (const [id, flush] of flushers.current) {
+      if (!flush() && blocked === undefined) blocked = id;
+    }
+    if (blocked !== undefined) {
+      setError("draft");
+      const row = Array.from(listRef.current?.children ?? []).find((node) =>
+        (node as HTMLElement).dataset.shoppingItem === blocked);
+      requestAnimationFrame(() => {
+        const target = row?.querySelector<HTMLInputElement>('input[aria-invalid="true"]') ??
+          row?.querySelector<HTMLInputElement>('.shopping-title-input');
+        target?.focus();
+      });
+      return;
+    }
+    setError(null);
+    setTemplatesOpen(true);
+  }
+
   return (
     <section className="shopping-page" aria-labelledby={`${addId}-heading`}>
       <h2 id={`${addId}-heading`} className="shopping-sr-only">{text.heading}</h2>
@@ -240,7 +286,7 @@ export default function ShoppingList({
             </select>
           </div>
           <button className="button button-primary shopping-add-button" type="submit"><Plus size={17} aria-hidden="true" /> {text.add}</button>
-          {error && <p id={`${addId}-error`} className="shopping-form-error" role="alert">{error === "name" ? text.nameError : text.addError}</p>}
+          {error && <p id={`${addId}-error`} className="shopping-form-error" role="alert">{error === "name" ? text.nameError : error === "draft" ? text.draftError : text.addError}</p>}
         </form>
 
         <div className="shopping-summary">
@@ -248,6 +294,7 @@ export default function ShoppingList({
             <span><span className="shopping-count-dot" /> {text.pending} <strong>{pendingCount}</strong></span>
             <span><CheckCheck size={14} aria-hidden="true" /> {text.purchased} <strong>{purchasedCount}</strong></span>
           </div>
+          <button className="shopping-templates-button" type="button" onClick={openTemplates}><CopyPlus size={15} aria-hidden="true" />{text.templates}</button>
         </div>
 
         {items.length > 0 && <div className="shopping-filters" role="group" aria-label={text.filters}>
@@ -292,6 +339,14 @@ export default function ShoppingList({
         </div>}
       </div>
       <p className="shopping-explanation">{text.explanation}</p>
+      {templatesOpen && <Modal label={text.templates} className="shopping-templates-modal" onClose={() => setTemplatesOpen(false)}>
+        <FeatureBoundary language={language}>
+          <Suspense fallback={<LoadingState />}>
+            <ShoppingTemplatesDialog templates={templates} pendingCount={pendingCount} language={language}
+              onSave={onSaveTemplate} onApply={applyTemplate} onDelete={onDeleteTemplate} onClose={() => setTemplatesOpen(false)} />
+          </Suspense>
+        </FeatureBoundary>
+      </Modal>}
     </section>
   );
 }
@@ -506,8 +561,13 @@ const ShoppingRow = memo(function ShoppingRow({ item, transaction, language, onP
     if (keepDraft) { saveTitle(); savePrice(); }
   }
 
-  const flush = useRef(() => {});
-  flush.current = () => { saveTitle(); savePrice(); };
+  const flush = useRef<() => boolean>(() => true);
+  flush.current = () => {
+    saveTitle();
+    savePrice();
+    const value = draft.current;
+    return !conflictRef.current && !value.titleDirty && !value.priceDirty && !value.currencyDirty;
+  };
   useEffect(() => {
     registerFlush(item.id, () => flush.current());
     return () => {

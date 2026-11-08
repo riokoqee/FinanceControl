@@ -1,0 +1,30 @@
+.shopping-templates-modal { max-width: 560px; }
+.shopping-templates .dialog-header h2 { margin: 0; }
+.shopping-templates .modal-close { width: 44px; height: 44px; }
+.shopping-template-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.shopping-template-save-label { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--subtle); font-size: 11px; }
+.shopping-template-save-label label { color: var(--ink); font-weight: 650; }
+.shopping-template-save-label span { flex-shrink: 0; }
+.shopping-template-form .form-input { min-width: 0; min-height: 44px; font-size: 12px; }
+.shopping-template-form .button { min-height: 44px; }
+.shopping-template-hint, .shopping-template-error { grid-column: 1 / -1; margin: 0; font-size: 11px; line-height: 1.6; }
+.shopping-template-hint { color: var(--muted); }
+.shopping-template-error { margin: 14px 0 0; color: var(--danger); }
+.shopping-template-list { list-style: none; padding: 0; margin: 4px 0 0; }
+.shopping-template-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; align-items: center; gap: 10px; padding: 15px 0; border-bottom: 1px solid var(--line); }
+.shopping-template-list > li:last-child { border-bottom: 0; padding-bottom: 0; }
+.shopping-template-name { min-width: 0; }
+.shopping-template-name strong { display: block; overflow-wrap: anywhere; color: var(--ink); font-size: 12px; line-height: 1.6; font-weight: 650; }
+.shopping-template-name span { color: var(--muted); font-size: 10px; }
+.shopping-template-apply { min-height: 44px; padding: 10px 12px; }
+.shopping-template-remove { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 7px; color: var(--muted); background: transparent; }
+.shopping-template-remove:hover { color: var(--danger); background: var(--danger-soft); }
+.shopping-template-empty { margin: 24px 0 8px; text-align: center; color: var(--muted); font-size: 12px; }
+@media (max-width: 520px) {
+  .shopping-template-form { grid-template-columns: minmax(0, 1fr); }
+  .shopping-template-form .form-input { font-size: 16px; }
+  .shopping-template-list > li { grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; }
+  .shopping-template-name { grid-column: 1; }
+  .shopping-template-remove { grid-column: 2; grid-row: 1; }
+  .shopping-template-apply { grid-column: 1 / -1; }
+}

@@ -1,0 +1,35 @@
+.category-budgets-hint { margin: -7px 0 23px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.category-budgets-fields { display: flex; flex-direction: column; gap: 13px; }
+.category-budget-field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, 135px) 86px; align-items: center; gap: 12px; }
+.category-budget-field-label { color: var(--subtle); font-size: 12px; font-weight: 550; overflow-wrap: anywhere; }
+.category-budget-field .form-input { min-width: 0; width: 100%; font-size: 12px; }
+.category-budget-field input { font-variant-numeric: tabular-nums; }
+
+.category-budget-item { min-width: 0; }
+.category-budget-caption { display: flex; justify-content: space-between; align-items: center; gap: 9px; margin-bottom: 5px; font-size: 12px; }
+.category-budget-name { display: inline-flex; align-items: center; gap: 7px; min-width: 0; color: var(--subtle); }
+.category-budget-name > span:last-child { overflow-wrap: anywhere; }
+.category-budget-percent { color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.category-budget-track { height: 4px; overflow: hidden; border-radius: 5px; background: var(--track); }
+.category-budget-track > span { display: block; height: 100%; border-radius: inherit; background: var(--teal); transition: width .3s ease; }
+.category-budget-amounts { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; margin-top: 5px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.category-budget-amounts > span { max-width: 100%; overflow-wrap: anywhere; }
+.category-budget-warning .category-budget-track > span { background: var(--gold); }
+.category-budget-over .category-budget-track > span { background: var(--coral); }
+.category-budget-over .category-budget-percent, .category-budget-overrun { color: var(--danger); }
+.category-panel:has(.category-budget-item) .legend-list { gap: 13px; }
+.category-panel .category-limits-button { padding: 8px 0 8px 10px; }
+
+@media (max-width: 760px) {
+  .category-panel:has(.category-budget-item) { display: block; }
+  .category-panel:has(.category-budget-item) .legend-list { padding-left: 20px; padding-top: 20px; }
+}
+@media (max-width: 480px) {
+  .category-budget-field { grid-template-columns: minmax(0, 1fr) 80px; gap: 7px 9px; }
+  .category-budget-field .form-input { font-size: 16px; }
+  .category-budget-field-label { grid-column: 1 / -1; }
+  .category-budgets-fields { gap: 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .category-budget-track > span { transition: none; }
+}
