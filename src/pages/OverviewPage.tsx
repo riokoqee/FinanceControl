@@ -219,7 +219,7 @@ export default function OverviewPage({
             <span />
           </div>
         </div>
-        <div className="stat-card stat-card-budget" data-state={budget ? progress >= 100 ? 'over' : progress >= 80 ? 'warning' : 'normal' : undefined}>
+        <div className="stat-card stat-card-budget" data-state={budget ? progress > 100 ? 'over' : progress >= 80 ? 'warning' : 'normal' : undefined}>
           <div className="stat-label">
             {budget ? tr("Осталось в бюджете") : tr("Месячный бюджет")}
             <span className="stat-icon">
@@ -245,7 +245,7 @@ export default function OverviewPage({
                   {Math.round(progress)}
                   {tr("% использовано")}
                 </span>
-                <BudgetState state={progress >= 100 ? 'over' : progress >= 80 ? 'warning' : 'normal'} language={language} />
+                <BudgetState state={progress > 100 ? 'over' : progress >= 80 ? 'warning' : 'normal'} language={language} reached={progress === 100} />
               </>
             ) : (
               <button className="inline-link" onClick={() => onProfile()}>
@@ -406,7 +406,7 @@ export default function OverviewPage({
                   </div>
                   <div className="category-budget-amounts">
                     <span>{amounts}</span>
-                    <BudgetState state={limit.state} language={language} />
+                    <BudgetState state={limit.state} language={language} reached={limit.percent === 100} />
                     {limit.state === "over" && <span className="category-budget-overrun">
                       {language === "en" ? "Over by " : "Сверх "}{formatMoney(-limit.remaining, limit.currency, language)}
                     </span>}
@@ -475,7 +475,7 @@ export default function OverviewPage({
             emptyState
           )}
         </section>
-        <div className="budget-panel" data-state={budget ? progress >= 100 ? 'over' : progress >= 80 ? 'warning' : 'normal' : undefined}>
+        <div className="budget-panel" data-state={budget ? progress > 100 ? 'over' : progress >= 80 ? 'warning' : 'normal' : undefined}>
           <span className="budget-icon">
             <Wallet size={21} strokeWidth={1.6} />
           </span>
@@ -497,11 +497,13 @@ export default function OverviewPage({
                 />
               </div>
               <span className="budget-caption">
-                {progress >= 100
+                {progress === 100
+                  ? (language === 'en' ? 'Limit reached' : 'Лимит использован')
+                  : progress > 100
                   ? `${tr("Лимит превышен на")} ${formatMoney(total - budget, currency, language)}`
                   : `${tr("В запасе")} ${formatMoney(remaining, currency, language)}`}
               </span>
-              <BudgetState state={progress >= 100 ? 'over' : progress >= 80 ? 'warning' : 'normal'} language={language} />
+              <BudgetState state={progress > 100 ? 'over' : progress >= 80 ? 'warning' : 'normal'} language={language} reached={progress === 100} />
             </>
           )}
           <button className="budget-link" onClick={() => onProfile()}>
