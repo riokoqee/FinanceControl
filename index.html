@@ -3,7 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#F1E5CB" />
+    <meta name="theme-color" />
+    <script>
+      // Resolve appearance before the stylesheet paints; never write user data.
+      (() => {
+        let theme;
+        try {
+          const readTheme = (raw) => {
+            const data = JSON.parse(raw);
+            const value = data?.profile?.theme;
+            return (data?.version === 1 || data?.version === 2) &&
+              (value === 'light' || value === 'dark' || value === 'system') ? value : undefined;
+          };
+          const raw = localStorage.getItem('finance-control:data:v1');
+          if (raw !== null) {
+            try { theme = readTheme(raw); } catch { /* Try the working copy below. */ }
+            if (!theme) theme = readTheme(localStorage.getItem('finance-control:data:v1:last-good'));
+          }
+        } catch { /* A blocked or damaged store still follows the system theme. */ }
+        document.documentElement.dataset.theme = theme === 'dark' ||
+          (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      })();
+    </script>
     <meta
       name="description"
       content="BeliLog (ベリログ) — Every Berry Counts. Личный журнал расходов. Записывайте покупки, следите за бюджетом и понимайте свои привычки. Данные сохраняются на вашем устройстве."

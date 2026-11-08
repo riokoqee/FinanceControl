@@ -221,6 +221,15 @@
   --green-soft: var(--success-soft);
   --shadow: var(--shadow-panel);
   --sidebar-width: 232px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
   color: var(--text);
   background: var(--bg);
   color-scheme: light;
@@ -1872,4 +1881,69 @@ html[data-theme='dark'] .activity-day.activity-selected { outline-color: var(--g
 
 @media (max-width: 600px) {
   .nav-list { margin-top: 0; }
+}
+
+/* Layout, navigation and header: a quiet captain's ledger. */
+body { font-variant-numeric: tabular-nums; }
+.sidebar { padding: 32px 16px 24px; }
+.brand { gap: 12px; padding: 0 8px; }
+.brand-name { font-size: 25px; letter-spacing: -1px; }
+.brand-name .brand-japanese { color: var(--text); }
+:root[data-theme='dark'] .brand-name .brand-japanese { color: var(--accent-text); }
+.brand-name .brand-tagline { font-size: 9px; letter-spacing: 1px; }
+.brand-mark { width: 44px; height: 48px; }
+.nav-list { gap: 8px; margin-top: 40px; }
+.nav-item { min-height: 52px; padding: 12px 16px; border-radius: var(--radius-md); font-size: 13px; }
+.nav-item:hover { background: var(--surface-hover); }
+.nav-item.nav-active { color: var(--accent-text); background: var(--accent-soft); }
+.nav-item.nav-active::before { background: var(--accent-text); top: 16px; bottom: 16px; }
+.nav-active .nav-count { color: var(--accent-text); background: var(--surface); }
+.topbar { height: 80px; padding-inline: 32px; }
+.topbar-actions { gap: 16px; }
+.topbar .avatar, .theme-button { width: 44px; height: 44px; border-radius: var(--radius-md); }
+.topbar .avatar { border-radius: 50%; border-color: var(--control-border); background: var(--surface-raised); color: var(--text); }
+.breadcrumb { font-size: 12px; }
+.workspace { max-width: 1480px; padding: 32px; }
+.page-heading { gap: 24px; margin-bottom: 32px; }
+.heading-copy { min-width: 0; }
+h1 { font-size: clamp(28px, 2.6vw, 38px); line-height: 1.2; letter-spacing: -1.25px; }
+.heading-dot { color: var(--text-muted); }
+.header-actions { gap: 12px; }
+.header-actions .button { min-height: 44px; padding: 12px 16px; }
+.header-actions .button-primary { color: var(--on-accent); background: var(--accent); border-color: var(--control-border); }
+.header-actions .button-primary:hover { background: var(--accent-hover); }
+.period-bar { margin-bottom: 24px; }
+.period-bar .month-control { gap: 8px; min-height: 44px; }
+.period-bar .month-control > .icon-button { width: 44px; height: 44px; }
+.month-picker { min-height: 44px; }
+.currency-select > select { min-height: 44px; padding-inline: 12px 28px; border-color: var(--control-border); border-radius: var(--radius-sm); font-size: 12px; }
+.workspace-footnote { margin-top: 24px; }
+.workspace-footnote .inline-link, .local-status { min-height: 44px; }
+@media (min-width: 1201px) { :root { --sidebar-width: 248px; } }
+@media (max-width: 1050px) {
+  .sidebar { padding: 24px 12px; }
+  .brand { padding: 0; }
+  .brand-mark { width: 44px; height: 48px; }
+  .nav-item { width: 48px; height: 48px; min-height: 48px; padding: 12px; }
+}
+@media (max-width: 760px) {
+  .workspace { padding: 24px; }
+  .topbar { padding-inline: 24px; }
+  .page-heading { gap: 16px; margin-bottom: 24px; }
+}
+@media (max-width: 600px) {
+  .sidebar { inset: auto 12px 12px; height: 72px; padding: 8px; border-radius: var(--radius-lg); border-color: var(--control-border); }
+  .nav-list { margin: 0; gap: 4px; }
+  .nav-item { min-width: 44px; width: auto; height: 54px; min-height: 54px; padding: 8px 4px; gap: 4px; font-size: 11px; border-radius: var(--radius-sm); }
+  .topbar { height: 72px; padding-inline: 16px; gap: 8px; }
+  .topbar-actions { gap: 4px; }
+  .breadcrumb { font-size: 11px; min-width: 0; }
+  .workspace { padding: 24px 16px 112px; }
+  .header-actions { gap: 8px; }
+  .header-actions .button { padding: 12px; font-size: 12px; white-space: normal; }
+  .period-bar { gap: 8px; }
+  .period-bar .month-control { gap: 0; }
+  .month-picker { min-width: 108px; }
+  .currency-select > select { padding-inline: 8px 20px; }
+  h1 { font-size: 28px; }
 }
