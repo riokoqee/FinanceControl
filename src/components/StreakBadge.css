@@ -3,3 +3,18 @@
 .streak-nav-badge--active { color: var(--accent-strong); border-color: var(--line); background: var(--accent-soft); }
 .streak-nav-badge--active > svg { fill: var(--accent-soft); }
 .streak-nav-badge-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--green); }
+
+.streak-nav-badge { min-width: 44px; min-height: 44px; padding: 10px 12px; border-color: var(--control-border); border-radius: 12px; background: var(--surface); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.streak-nav-badge:hover { border-color: var(--control-border); background: var(--surface-hover); }
+.streak-nav-badge--active { border-color: var(--border-accent); background: var(--accent-soft); color: var(--accent-text); }
+.streak-nav-badge--active:hover { border-color: var(--border-accent); }
+.streak-nav-badge--active > svg { fill: var(--accent-soft); }
+.streak-nav-badge-dot { width: 5px; height: 5px; background: var(--success); }
+
+@media (max-width: 600px) {
+  .streak-nav-badge { min-height: 44px; padding-inline: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streak-nav-badge { animation: none !important; transition: none !important; }
+}

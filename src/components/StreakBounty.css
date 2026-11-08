@@ -195,3 +195,59 @@ html[data-theme='dark'] .toast--pirate > svg { color: var(--gold); }
   .bounty-flame, .bounty-ember, .bounty-ash, .bounty-gold-spark { display: none; }
   .bounty-poster, .bounty-poster:hover { transform: rotate(2deg); }
 }
+
+.streak-bounty { gap: clamp(24px, 4vw, 56px); margin-bottom: 24px; padding: 32px; border-color: var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-panel); }
+.streak-bounty--profile { margin-bottom: 0; }
+.streak-bounty--empty { padding: 28px 32px; }
+.streak-bounty-title { color: var(--text); }
+.streak-bounty-title-spark { color: var(--accent-text); }
+.streak-bounty-description { color: var(--text-muted); }
+.streak-bounty-status { gap: 8px; margin-top: 16px; padding: 8px 12px; border-color: var(--border); border-radius: 8px; background: var(--surface-raised); color: var(--text-muted); font-size: 12px; }
+.streak-bounty-status--done { border-color: transparent; background: var(--success-soft); color: var(--success); }
+.streak-bounty-first-day { margin-top: 16px; color: var(--text-muted); }
+.streak-bounty-first-day > span { color: var(--text-muted); }
+.streak-bounty-metrics { gap: 16px 32px; margin: 24px 0; }
+.streak-bounty-metrics > div + div { padding-left: 32px; border-color: var(--border); }
+.streak-bounty-metrics > div > span { gap: 8px; margin-bottom: 8px; color: var(--text-muted); }
+.streak-bounty-metrics strong { color: var(--text); }
+.streak-bounty-metrics small { color: var(--text-muted); }
+.streak-bounty-action-row { gap: 16px 24px; }
+.streak-bounty-cta { min-height: 44px; }
+.streak-bounty-next > span { margin-bottom: 4px; color: var(--text-muted); }
+.streak-bounty-next > strong { color: var(--success); font-variant-numeric: tabular-nums; }
+.pirate-progress { margin-bottom: 24px; }
+.pirate-progress-heading { margin-bottom: 8px; font-size: 12px; }
+.pirate-progress-heading > strong { color: var(--pirate-metal); }
+.pirate-progress-track { height: 6px; border-radius: 8px; background: var(--border); }
+.pirate-progress-caption { margin-top: 8px; color: var(--text-muted); font-size: 11px; }
+.pirate-promotion { gap: 12px; margin-bottom: 16px; }
+.pirate-promotion small { color: var(--text-muted); }
+.pirate-promotion strong { color: var(--text); }
+
+/* The paper, portrait, lettering, figures and exact composition stay intact.
+   Frame/seal pigments come from the fixed central poster tokens. */
+.bounty-poster[data-rank='rookie'] { --poster-burn: .30; }
+.bounty-poster[data-rank='rising'] { --poster-burn: .44; }
+.bounty-poster[data-rank='supernova'] { --poster-burn: .58; }
+.bounty-poster[data-rank='legend'] { --poster-burn: .66; }
+.bounty-poster[data-rank='supernova'] .bounty-poster-frame { outline-color: var(--poster-frame-legend); }
+.bounty-poster[data-rank='legend'] .bounty-poster-frame { outline-color: var(--poster-frame-legend-soft); }
+
+@media (max-width: 900px) and (min-width: 701px) {
+  .streak-bounty { gap: 24px; padding: 24px; }
+  .streak-bounty-metrics { gap: 16px; }
+  .streak-bounty-metrics > div + div { padding-left: 16px; }
+}
+
+@media (max-width: 700px) {
+  .streak-bounty { gap: 32px; padding: 24px 24px 32px; }
+  .streak-bounty--empty { padding: 24px; }
+  .streak-bounty-metrics { gap: 16px 24px; }
+  .streak-bounty-metrics > div + div { padding-left: 24px; }
+  .streak-bounty-cta { white-space: normal; text-align: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streak-bounty, .streak-bounty *, .streak-bounty *::before, .streak-bounty *::after { animation: none !important; transition: none !important; }
+  .bounty-poster-effects, .bounty-flame, .bounty-ember, .bounty-ash, .bounty-gold-spark { display: none !important; }
+}

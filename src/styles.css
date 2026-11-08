@@ -147,16 +147,16 @@
   --poster-portrait-bg: #D8C8A6;
   --poster-portrait-hat-bg: #E4D3AD;
   --poster-portrait-hat-glow: #C7AC755C;
-  --poster-frame-rookie: #765737;
-  --poster-frame-rising: #956638;
-  --poster-frame-supernova: #A9843F;
+  --poster-frame-rookie: #5E6F7C;
+  --poster-frame-rising: #2F6F6E;
+  --poster-frame-supernova: var(--brand-coral);
   --poster-frame-legend: #9D7838;
   --poster-frame-soft: var(--poster-frame-rookie-soft);
-  --poster-seal-rookie: #8F493C;
-  --poster-seal-rising: #8A552F;
-  --poster-seal-rising-fill: #DCB77B57;
-  --poster-seal-supernova: #896224;
-  --poster-seal-supernova-fill: #E5C47C99;
+  --poster-seal-rookie: #4A5B6B;
+  --poster-seal-rising: #2F6F6E;
+  --poster-seal-rising-fill: var(--poster-paper);
+  --poster-seal-supernova: var(--brand-coral);
+  --poster-seal-supernova-fill: var(--poster-paper);
   --poster-seal-legend: #79571F;
   --poster-seal-legend-fill: #E8CA88C4;
   --poster-seal-legend-border: #94702F;
@@ -195,7 +195,7 @@
   --poster-frame-supernova-soft: color-mix(in srgb, var(--poster-frame-supernova) 60%, transparent);
   --poster-frame-legend-soft: color-mix(in srgb, var(--poster-frame-legend) 62%, transparent);
   --poster-seal-rookie-border: color-mix(in srgb, var(--poster-seal-rookie) 50%, transparent);
-  --poster-seal-rookie-fill: color-mix(in srgb, var(--poster-paper) 27%, transparent);
+  --poster-seal-rookie-fill: var(--poster-paper);
   --poster-seal-rising-border: color-mix(in srgb, var(--poster-seal-rising) 65%, transparent);
   --poster-seal-rising-halo: color-mix(in srgb, var(--poster-seal-rising) 22%, transparent);
   --poster-seal-supernova-border: var(--poster-frame-supernova);
@@ -2205,4 +2205,56 @@ html[data-theme='dark'] .storage-illustration { border-color: var(--border); bac
   .storage-details { padding: 16px 20px; }
   .storage-actions { padding: 0 20px 20px; }
   .theme-option { min-height: 88px; font-size: 11px; }
+}
+
+/* Area f — activity, streak and WANTED accents. Append after existing rules. */
+.activity-panel {
+  padding: 28px;
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.activity-header { align-items: center; gap: 16px; margin-bottom: 24px; }
+.activity-header h2 { margin-bottom: 0; color: var(--text); font-weight: 700; }
+.activity-year { gap: 4px; padding: 4px; border-color: var(--control-border); background: var(--surface-raised); }
+.activity-year strong { padding-inline: 4px; color: var(--text); }
+.activity-year .icon-button { width: 36px; height: 36px; color: var(--text-muted); }
+.activity-scroll { padding: 4px 4px 12px; scrollbar-color: var(--control-border) var(--surface-raised); overscroll-behavior-inline: contain; }
+.activity-months { margin-bottom: 12px; color: var(--text-muted); }
+.activity-weekdays { color: var(--text-muted); }
+.activity-day { border-radius: 3px; transition: background-color 160ms ease; }
+.activity-day:hover { z-index: 1; outline: 2px solid var(--focus-ring); outline-offset: 2px; transform: none; }
+.activity-panel .activity-day.activity-today { border-color: var(--focus-ring); box-shadow: 0 0 0 1px var(--focus-ring); }
+.activity-panel .activity-day.activity-selected,
+.activity-panel .activity-day:focus-visible { z-index: 2; outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.activity-panel .activity-day:focus-visible { box-shadow: 0 0 0 1px var(--surface); }
+.activity-day[data-future='true'] { opacity: .45; }
+.activity-legend { flex-wrap: wrap; gap: 8px; margin-top: 16px; line-height: 1.6; }
+.activity-selected-label { min-width: 0; overflow-wrap: anywhere; color: var(--text-muted); }
+.activity-selected-label strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.activity-legend .activity-day { width: 12px; height: 12px; }
+.activity-stats { gap: 12px 24px; margin-top: 20px; padding-top: 20px; color: var(--text-muted); }
+.activity-stats strong { color: var(--text); font-size: 14px; font-variant-numeric: tabular-nums; }
+.activity-stats svg { color: var(--success); }
+.activity-hint { margin-top: 16px; color: var(--text-muted); }
+
+@media (max-width: 600px) {
+  .activity-panel { padding: 20px; }
+  .activity-header { gap: 16px; margin-bottom: 20px; }
+  .activity-year .icon-button { width: 44px; height: 44px; }
+  /* Gregorian years occupy 53 or 54 displayed weeks. Every day keeps its own
+     non-overlapping 44px target within the existing horizontal scroller. */
+  .activity-inner { --activity-columns: 53; min-width: calc(var(--activity-columns) * 48px + 30px) !important; }
+  .activity-inner:has(.activity-week:nth-child(54)) { --activity-columns: 54; }
+  .activity-grid { gap: 4px; }
+  .activity-week { grid-template-rows: repeat(7, 44px); flex: 1 0 44px; }
+  .activity-weekdays { grid-template-rows: repeat(7, 44px); }
+  .activity-grid .activity-day { min-width: 44px; min-height: 44px; height: 44px; aspect-ratio: auto; border-radius: 8px; }
+  .activity-selected-label { flex-basis: 100%; margin-bottom: 4px; }
+  .activity-stats { gap: 12px 20px; }
+  .activity-legend .activity-day { width: 12px; height: 12px; min-width: 12px; min-height: 12px; border-radius: 3px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-day { animation: none !important; transition: none !important; }
 }
