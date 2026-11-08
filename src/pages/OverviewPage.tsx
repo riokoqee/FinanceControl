@@ -34,13 +34,13 @@ const NO_CATEGORY_BUDGETS: CategoryBudget[] = [];
 const categoryLabels = new Map(CATEGORIES.map((category) => [category.id, category.label]));
 
 const categoryColors: Record<CategoryId, string> = {
-  food: "#C35D4C",
-  shopping: "#5A9C9B",
-  transport: "#718EAB",
-  home: "#D7B777",
-  entertainment: "#A68469",
-  health: "#80B8A3",
-  other: "#b7b9b5",
+  food: "var(--chart-food)",
+  shopping: "var(--chart-shopping)",
+  transport: "var(--chart-transport)",
+  home: "var(--chart-home)",
+  entertainment: "var(--chart-entertainment)",
+  health: "var(--chart-health)",
+  other: "var(--chart-other)",
 };
 
 interface OverviewPageProps {

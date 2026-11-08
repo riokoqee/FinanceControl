@@ -252,7 +252,10 @@ export default function App() {
       document.documentElement.dataset.theme = dark ? "dark" : "light";
       document
         .querySelector('meta[name="theme-color"]')
-        ?.setAttribute("content", dark ? "#101D2C" : "#F1E5CB");
+        ?.setAttribute(
+          "content",
+          getComputedStyle(document.documentElement).getPropertyValue("--bg").trim(),
+        );
     };
     apply();
     media.addEventListener("change", apply);

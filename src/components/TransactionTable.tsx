@@ -40,13 +40,13 @@ const categoryIcons: Record<CategoryId, LucideIcon> = {
   other: Ellipsis,
 };
 const categoryColors: Record<CategoryId, string> = {
-  food: "#C35D4C",
-  shopping: "#5A9C9B",
-  transport: "#718EAB",
-  home: "#D7B777",
-  entertainment: "#A68469",
-  health: "#80B8A3",
-  other: "#b7b9b5",
+  food: "var(--chart-food)",
+  shopping: "var(--chart-shopping)",
+  transport: "var(--chart-transport)",
+  home: "var(--chart-home)",
+  entertainment: "var(--chart-entertainment)",
+  health: "var(--chart-health)",
+  other: "var(--chart-other)",
 };
 
 function CategoryIcon({ category }: { category: CategoryId }) {
@@ -54,7 +54,7 @@ function CategoryIcon({ category }: { category: CategoryId }) {
   return (
     <span
       className="transaction-icon"
-      style={{ color: categoryColors[category], background: `${categoryColors[category]}19` }}
+      style={{ color: categoryColors[category], background: `color-mix(in srgb, ${categoryColors[category]} 8%, var(--surface))` }}
       aria-hidden="true"
     >
       <Icon size={18} strokeWidth={1.8} />

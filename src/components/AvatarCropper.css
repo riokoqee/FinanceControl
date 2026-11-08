@@ -12,8 +12,8 @@
 .avatar-crop-viewport:focus-visible { outline: 3px solid var(--accent-strong); outline-offset: 4px; }
 .avatar-crop-dragging { cursor: grabbing; }
 .avatar-crop-viewport img, .avatar-crop-preview img { position: absolute; display: block; max-width: none; max-height: none; transform: translate(-50%, -50%); pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
-.avatar-crop-guide { position: absolute; pointer-events: none; inset: 1px; border: 2px solid #f1e5cbe8; border-radius: 50%; box-shadow: 0 0 0 150px #101d2c90; }
-.avatar-crop-guide::before, .avatar-crop-guide::after { content: ''; position: absolute; background: #f1e5cb50; }
+.avatar-crop-guide { position: absolute; pointer-events: none; inset: 1px; border: 2px solid var(--crop-guide); border-radius: 50%; box-shadow: 0 0 0 150px var(--crop-mask); }
+.avatar-crop-guide::before, .avatar-crop-guide::after { content: ''; position: absolute; background: var(--crop-grid); }
 .avatar-crop-guide::before { top: 50%; left: 8px; right: 8px; height: 1px; }
 .avatar-crop-guide::after { left: 50%; top: 8px; bottom: 8px; width: 1px; }
 .avatar-crop-hint { max-width: 300px; margin: 12px auto 22px; color: var(--muted); font-size: 11px; line-height: 1.7; text-align: center; }

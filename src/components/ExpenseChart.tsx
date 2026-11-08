@@ -116,7 +116,7 @@ export default memo(function ExpenseChart({
                 width={step * 0.6}
                 height={Math.max(barHeight, 3)}
                 rx={Math.min(4, step * 0.25)}
-                fill={active === index ? "#A9493B" : value.total ? "#C35D4C" : "var(--chart-empty)"}
+                fill={active === index ? "var(--chart-bar-active)" : value.total ? "var(--chart-bar)" : "var(--chart-empty)"}
                 opacity={active !== index ? 0.5 : 1}
               >
                 <title>{value.label}: {value.money}</title>
