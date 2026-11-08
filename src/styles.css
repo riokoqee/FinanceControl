@@ -2043,3 +2043,92 @@ h1 { font-size: clamp(28px, 2.6vw, 38px); line-height: 1.2; letter-spacing: -1.2
   .budget-panel { padding: 24px; }
   .budget-values, .budget-track { max-width: none; }
 }
+
+/* Tracker and expense editors: clear amounts and a consistent ledger grid. */
+.tracker-summary { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 24px; padding: 24px; margin-bottom: 24px; border-radius: var(--radius-lg); box-shadow: var(--shadow-panel); }
+.tracker-summary > div { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.tracker-summary > div + div { padding-left: 24px; }
+.tracker-summary > div > span { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.tracker-summary strong { color: var(--text); font-size: 28px; line-height: 1.2; overflow-wrap: anywhere; }
+.tracker-summary > div:first-child strong { font-size: 40px; letter-spacing: -1px; }
+.tracker-panel { overflow: hidden; }
+.filter-bar { gap: 12px; padding: 24px; background: var(--surface); }
+.search-field { min-width: 0; min-height: 44px; flex: 1 1 240px; gap: 12px; border-color: var(--control-border); border-radius: var(--radius-sm); background: var(--surface-raised); }
+.search-field input { min-width: 0; font-size: 14px; }
+.search-field > svg { color: var(--text-muted); }
+.filter-select { min-height: 44px; min-width: 140px; max-width: none; padding: 12px 28px 12px 12px; border-color: var(--control-border); border-radius: var(--radius-sm); background: var(--surface-raised); font-size: 12px; }
+.filter-summary { padding: 0 24px 16px; font-size: 12px; }
+.checkbox-label { min-height: 44px; gap: 8px; }
+.checkbox-label input { width: 16px; height: 16px; accent-color: var(--focus-ring); }
+.transaction-table thead { background: var(--surface-raised); }
+.transaction-table th, th.amount-cell { padding: 12px 16px; height: 44px; color: var(--text-muted); font-size: 11px !important; font-weight: 600; }
+.transaction-table td { padding: 16px; background: var(--surface); vertical-align: middle; }
+.transaction-table tbody tr:hover td { background: var(--surface-hover); }
+.transaction-table th:first-child, .transaction-table td:first-child { padding-left: 24px; }
+.transaction-table th:last-child, .transaction-table td:last-child { padding-right: 24px; }
+.transaction-open { min-height: 44px; gap: 12px; border-radius: var(--radius-sm); }
+.transaction-icon { width: 40px; height: 40px; border-radius: var(--radius-md); }
+.transaction-icon svg { width: 18px; height: 18px; }
+.transaction-name { color: var(--text); font-size: 13px; font-weight: 650; line-height: 1.5; }
+.transaction-note { margin-top: 4px; color: var(--text-muted); font-size: 11px; }
+.item-count { gap: 4px; margin-top: 4px; font-size: 11px; }
+.category-badge { max-width: 160px; padding: 4px 8px; border-radius: var(--radius-sm); background: var(--surface-raised); font-size: 11px; line-height: 1.5; white-space: normal; }
+.transaction-amount { color: var(--text); font-size: 14px; font-weight: 750; white-space: nowrap; }
+.row-actions { gap: 4px; }
+.row-actions .icon-button { width: 44px; height: 44px; min-height: 44px; border-radius: var(--radius-sm); }
+.row-actions .icon-button svg { width: 16px; height: 16px; }
+.table-footer, .table-pagination { padding: 16px 24px; gap: 12px; font-size: 12px; }
+.table-footer .inline-link { min-height: 44px; }
+.table-pagination-controls button { min-width: 44px; min-height: 44px; border-color: var(--control-border); border-radius: var(--radius-sm); }
+.recent-panel .panel-header { margin-bottom: 16px; }
+.recent-panel .transaction-open { gap: 8px; }
+.recent-panel .transaction-icon { width: 32px; height: 32px; }
+.recent-panel .transaction-table td { padding: 12px; }
+.recent-panel .transaction-table td:first-child { padding-left: 24px; }
+.recent-panel .transaction-table td:last-child { padding-right: 16px; }
+.recent-panel .row-actions { gap: 0; }
+.detail-summary { padding: 24px; border-radius: var(--radius-md); background: var(--surface-raised); }
+.detail-summary > strong { font-size: 36px; line-height: 1.2; }
+.detail-meta { gap: 12px; }
+.items-header { margin-bottom: 16px; }
+.items-list { gap: 12px; }
+.purchase-item { padding: 16px; gap: 12px; border-radius: var(--radius-md); }
+.purchase-item-title { font-size: 14px; }
+.purchase-item-amount { font-size: 14px; }
+.purchase-item > .icon-button, .item-edit-form > .icon-button { width: 44px; height: 44px; min-width: 44px; border-radius: var(--radius-sm); }
+.item-fields input, .add-item-form input { min-height: 44px; border-color: var(--control-border); border-radius: var(--radius-sm); }
+.item-fields { gap: 12px; }
+.item-edit-form { gap: 8px; }
+.category-option { border-radius: var(--radius-md); border-color: var(--control-border); background: var(--surface-raised); color: var(--text-muted); font-size: 11px; }
+.category-option.is-selected { color: var(--text); background: var(--surface); border-color: var(--control-border); box-shadow: inset 0 0 0 1px var(--control-border); }
+.category-option.is-selected svg { color: var(--text); }
+@media (max-width: 600px) {
+  .tracker-summary { gap: 16px; padding: 20px 16px; }
+  .tracker-summary > div + div { padding-left: 16px; }
+  .tracker-summary > div > span { font-size: 11px; }
+  .tracker-summary > div:first-child strong { font-size: 32px; }
+  .tracker-summary strong { font-size: 24px; }
+  .filter-bar { padding: 16px; }
+  .search-field { flex-basis: 100%; }
+  .search-field input { font-size: 16px; }
+  .filter-select { flex: 1 1 128px; min-width: 0; font-size: 13px; }
+  .filter-summary { padding-inline: 16px; }
+  .transaction-table td:first-child { padding-left: 16px; }
+  .transaction-table td:last-child { padding-right: 16px; }
+  .recent-panel .transaction-table td { padding: 12px 4px; }
+  .recent-panel .transaction-table td:first-child { padding-left: 12px; }
+  .recent-panel .transaction-table td:last-child { padding-right: 8px; }
+  .recent-panel .transaction-open { gap: 8px; }
+  .recent-panel .transaction-open .transaction-name { max-width: 96px; font-size: 12px; }
+  .recent-panel .transaction-icon { display: none; }
+  .recent-panel .row-actions .icon-button { width: 44px; }
+  .recent-panel .transaction-amount { font-size: 12px; }
+  .table-footer, .table-pagination { padding: 16px; }
+  .table-footer > .inline-link { margin: 0; flex-basis: auto; }
+  .detail-summary { padding: 20px; }
+  .detail-summary > strong { font-size: 32px; }
+  .purchase-item { padding: 12px; gap: 8px; }
+  .purchase-item > .icon-button { width: 44px; min-width: 44px; }
+  .item-fields { grid-template-columns: minmax(0, 1fr) minmax(80px, 96px); gap: 8px; }
+  .item-edit-form > .icon-button { height: 44px; }
+}
