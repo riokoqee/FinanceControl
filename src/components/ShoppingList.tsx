@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { Check, CheckCheck, CopyPlus, ListChecks, Plus, Trash2 } from "lucide-react";
 import { CURRENCIES, formatMoney } from "../lib/finance";
 import type { Currency, Language, ShoppingItem, ShoppingTemplate, Transaction } from "../lib/finance";
-import { parseShoppingPrice } from "../lib/shopping";
+import { parseShoppingPrice } from "../lib/shopping/shopping";
 import FeatureBoundary from "./FeatureBoundary";
 import LoadingState from "./LoadingState";
 import Modal from "./Modal";

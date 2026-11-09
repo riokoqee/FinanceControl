@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_AMOUNT, MAX_BACKUP_LENGTH, MAX_TRANSACTIONS, STORAGE_KEY, createEmptyData, type AppData, type CategoryBudget, type ShoppingTemplate, type Transaction } from './finance';
+import { MAX_AMOUNT, MAX_BACKUP_LENGTH, MAX_TRANSACTIONS, STORAGE_KEY, createEmptyData, type AppData, type CategoryBudget, type ShoppingTemplate, type Transaction } from '../finance';
 import {
   CORRUPT_KEY,
   LAST_GOOD_KEY,
@@ -15,8 +15,8 @@ import {
   readStoredData,
   writeStoredData,
 } from './storage';
-import { applyShoppingTemplate, makeShoppingTemplate } from './templates';
-import type { StreakLedger } from './streakTypes';
+import { applyShoppingTemplate, makeShoppingTemplate } from '../shopping/templates';
+import type { StreakLedger } from '../streak/streakTypes';
 
 const expense = (patch: Partial<Transaction> = {}): Transaction => ({
   id: 'expense', title: 'Groceries', amount: 25, currency: 'EUR', category: 'food', date: '2026-11-03', ...patch,
@@ -162,6 +162,36 @@ describe('persistent accounting-day confirmations', () => {
     const desired = withDays(...base.streak!.confirmedDays, { date: '2026-11-02', status: 'NO_SPEND' });
     expect(() => commitStoredData(base, desired, full)).toThrow('QuotaExceededError');
     expect(readStoredData(storage).data).toEqual(base);
+  });
+});
+
+describe('manual exchange-rate persistence', () => {
+  const rates = { USD: 1 as const, EUR: 0.5, KZT: 500 };
+  it('keeps manual rates when a stale tab changes unrelated profile fields', () => {
+    const base = data();
+    const remote: AppData = { ...base, version: 4, profile: { ...base.profile, exchangeRates: rates } };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    const next = commitStoredData(base, { ...base, profile: { ...base.profile, name: 'Captain' } }, storage);
+    expect(next.version).toBe(4);
+    expect(next.profile).toEqual({ ...base.profile, name: 'Captain', exchangeRates: rates });
+    expect(readStoredData(storage).data).toEqual(next);
+  });
+  it('retains version four while preserving accounting days through both commit paths', () => {
+    const base: AppData = { ...data(), version: 4, profile: { ...data().profile, exchangeRates: rates },
+      streak: { version: 1, startedOn: '2026-11-01', confirmedDays: [{ date: '2026-11-01', status: 'NO_SPEND' }] } };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const first = commitStoredData(base, { ...base, profile: { ...base.profile, theme: 'dark' } }, storage);
+    const next = commitStoredMutation(first, (current) => ({ ...current, transactions: [] }), storage);
+    expect(next.version).toBe(4);
+    expect(next.profile.exchangeRates).toEqual(rates);
+    expect(next.streak).toEqual(base.streak);
+  });
+  it('rejects a competing rates edit and merges an unrelated theme edit', () => {
+    const base = { ...data().profile, exchangeRates: rates };
+    const remote = { ...base, exchangeRates: { ...rates, KZT: 600 } };
+    expect(() => mergeProfileDraft(base, remote, { ...base, exchangeRates: { ...rates, EUR: 0.8 } }))
+      .toThrow(DataConflictError);
+    expect(mergeProfileDraft(base, remote, { ...base, theme: 'dark' })).toEqual({ ...remote, theme: 'dark' });
   });
 });
 

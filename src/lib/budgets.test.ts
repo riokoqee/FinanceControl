@@ -8,6 +8,13 @@ const record = (amount: number, values: Partial<Transaction> = {}): Transaction 
 const limit: CategoryBudget = { id: 'food', amount: 100, currency: 'USD' };
 
 describe('category budget progress', () => {
+  it('applies manual rates to each limit currency while preserving original records', () => {
+    const records = [record(10, { currency: 'EUR' }), record(1000, { currency: 'KZT' })];
+    const before = structuredClone(records);
+    expect(summarizeCategoryBudgets(records, [limit], '2026-11', { USD: 1, EUR: 0.5, KZT: 500 })[0])
+      .toMatchObject({ spent: 22, remaining: 78, percent: 22 });
+    expect(records).toEqual(before);
+  });
   it('uses each limit currency and excludes other categories and months', () => {
     const records = [
       record(10), record(9.2, { currency: 'EUR' }), record(4800, { currency: 'KZT' }),

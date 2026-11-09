@@ -1,17 +1,17 @@
 import { memo, useEffect, useState } from "react";
 import { ArrowUpRight, CheckCircle2, Crown, Flame, Leaf, Plus, Skull, Snowflake, Star, Trophy } from "lucide-react";
 import type { Language, Profile, Transaction } from "../lib/finance";
-import { BERRIES_PER_DAY } from "../lib/streak";
-import { useStreakStats } from "../lib/useStreakStats";
-import { useLocalCalendarDay } from "../lib/useStreakStats";
-import type { StreakLedger } from "../lib/streakTypes";
-import { streakCopy, streakMessage } from "../lib/streakCopy";
+import { BERRIES_PER_DAY } from "../lib/streak/streak";
+import { useStreakStats } from "../hooks/useStreakStats";
+import { useLocalCalendarDay } from "../hooks/useStreakStats";
+import type { StreakLedger } from "../lib/streak/streakTypes";
+import { streakCopy, streakMessage } from "../lib/streak/streakCopy";
 import StreakDays from "./StreakDays";
 import { dayLabel } from "./StreakBadge";
-export { useStreakStats } from "../lib/useStreakStats";
+export { useStreakStats } from "../hooks/useStreakStats";
 export { default as StreakBadge } from "./StreakBadge";
-import { getPirateProgress } from "../lib/pirateRanks";
-import type { StreakIncrease } from "../lib/pirateRanks";
+import { getPirateProgress } from "../lib/streak/pirateRanks";
+import type { StreakIncrease } from "../lib/streak/pirateRanks";
 import "./StreakBounty.css";
 
 /** Transient UI feedback, created only by saving a new daily record. */

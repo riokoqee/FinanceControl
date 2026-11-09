@@ -1,4 +1,4 @@
-import type { Language } from "./finance";
+import type { Language } from "../finance";
 import type { StreakStats } from "./streak";
 
 export type PirateRankId = "rookie" | "rising" | "supernova" | "legend";

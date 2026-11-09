@@ -5,6 +5,22 @@ import { filterExpenses, indexExpenseText, newestFirst, orderExpenses, summarize
 
 const records = createDemoData(new Date(2026, 10, 6, 12)).transactions;
 describe('expense view calculations', () => {
+  it('uses saved rates consistently for both months, categories and amount sorting', () => {
+    const rates = { USD: 1 as const, EUR: 0.5, KZT: 500 };
+    const mixed: Transaction[] = [
+      { id: 'usd', title: 'USD', amount: 10, currency: 'USD', category: 'food', date: '2026-11-09' },
+      { id: 'eur', title: 'EUR', amount: 10, currency: 'EUR', category: 'food', date: '2026-11-09' },
+      { id: 'kzt', title: 'KZT', amount: 1000, currency: 'KZT', category: 'home', date: '2026-11-09' },
+      { id: 'prior', title: 'Prior', amount: 5, currency: 'EUR', category: 'home', date: '2026-10-09' },
+    ];
+    const before = structuredClone(mixed);
+    const result = summarizeExpenses(mixed, '2026-11', 'USD', rates);
+    expect(result.total).toBe(32);
+    expect(result.previousTotal).toBe(10);
+    expect(result.categories.map(({ id, value }) => [id, value])).toEqual([['food', 30], ['home', 2]]);
+    expect(orderExpenses(mixed.slice(0, 3), 'largest', 'USD', rates).map(({ id }) => id)).toEqual(['eur', 'usd', 'kzt']);
+    expect(mixed).toEqual(before);
+  });
   it.each(['USD', 'EUR', 'KZT'] as const)('keeps totals, category sums and the five newest records in %s', (currency) => {
     const result = summarizeExpenses(records, '2026-11', currency);
     expect(result.transactions).toEqual(getMonthTransactions(records, '2026-11'));

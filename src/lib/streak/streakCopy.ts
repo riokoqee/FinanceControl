@@ -1,4 +1,4 @@
-import type { Language } from "./finance";
+import type { Language } from "../finance";
 
 /** All check-in and streak interface wording lives here, shared by both views. */
 export const streakCopy = {

@@ -22,7 +22,6 @@ import {
   ShieldCheck,
   Sparkles,
   Sun,
-  Upload,
   UserRound,
   Wallet,
   X,
@@ -35,23 +34,25 @@ import {
   createDemoData,
   createEmptyData,
   todayString,
-  validateBackup,
 } from "./lib/finance";
 import type {
   AppData,
   CategoryBudget,
   Currency,
+  ExchangeRates,
   Transaction,
 } from "./lib/finance";
 
-import { useProfileDraft } from "./lib/useProfileDraft";
-import { usePersistentData } from "./lib/usePersistentData";
+import { useShoppingActions } from "./hooks/useShoppingActions";
+import { useDataTransfer } from "./hooks/useDataTransfer";
+import { settingsCopy } from "./lib/settingsCopy";
+import { useProfileDraft } from "./hooks/useProfileDraft";
+import { usePersistentData } from "./hooks/usePersistentData";
 import {
-  DataConflictError,
   mergeCategoryBudgetsDraft,
   mergeProfileDraft,
   mergeTransactionDraft,
-} from "./lib/storage";
+} from "./lib/storage/storage";
 import {
   filterExpenses,
   indexExpenseText,
@@ -61,33 +62,19 @@ import {
 import FeatureBoundary from "./components/FeatureBoundary";
 import LoadingState from "./components/LoadingState";
 import Button from "./components/Button";
-import Modal from "./components/Modal";
-const TransactionDialog = lazy(() => import("./components/TransactionDialog"));
+import AppDialogs from "./components/AppDialogs";
 const OverviewPage = lazy(() => import("./pages/OverviewPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const TrackerPage = lazy(() => import("./pages/TrackerPage"));
-const EntryDetails = lazy(() => import("./components/EntryDetails"));
-const AvatarCropper = lazy(() => import("./components/AvatarCropper"));
 const ShoppingList = lazy(() => import("./components/ShoppingList"));
-const CategoryBudgetsDialog = lazy(
-  () => import("./components/CategoryBudgetsDialog"),
-);
-import { makeShoppingTemplate, applyShoppingTemplate } from "./lib/templates";
-import type { ShoppingPurchaseConfirmation } from "./components/ShoppingList";
-import {
-  addShoppingItem,
-  confirmShoppingPurchase,
-  removeShoppingItem,
-  saveShoppingPrice,
-  updateShoppingItem,
-} from "./lib/shopping";
+import { makeShoppingTemplate, applyShoppingTemplate } from "./lib/shopping/templates";
 import StreakBadge from "./components/StreakBadge";
-import { useLocalCalendarDay, useStreakStats } from "./lib/useStreakStats";
+import { useLocalCalendarDay, useStreakStats } from "./hooks/useStreakStats";
 import type { BountyCelebration } from "./components/StreakBounty";
-import { canConfirmTrackingDay, confirmTrackingDay, getTrackingStats, reconcileStreak } from "./lib/streakLedger";
-import { mergeStreakLedgers } from "./lib/streakTypes";
-import { streakCopy } from "./lib/streakCopy";
-import { getStreakIncrease } from "./lib/pirateRanks";
+import { canConfirmTrackingDay, confirmTrackingDay, getTrackingStats, reconcileStreak } from "./lib/streak/streakLedger";
+import { mergeStreakLedgers } from "./lib/streak/streakTypes";
+import { streakCopy } from "./lib/streak/streakCopy";
+import { getStreakIncrease } from "./lib/streak/pirateRanks";
 import { LanguageProvider, translate } from "./lib/i18n";
 import type { Language } from "./lib/finance";
 
@@ -120,13 +107,6 @@ function readPage(): Page {
     ? value
     : "overview";
 }
-function createRecordId(): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-  );
-}
-
 /** Persist daily facts with the expense that earned them, never as a second write. */
 function withTrackingDays(previous: AppData, desired: AppData, now = new Date()): AppData {
   const original = previous.streak ?? (previous.transactions.length
@@ -134,7 +114,8 @@ function withTrackingDays(previous: AppData, desired: AppData, now = new Date())
   const source = mergeStreakLedgers(original, desired.streak);
   if (!source && desired.transactions.length === 0) return desired;
   const streak = reconcileStreak(desired.transactions, source, now);
-  return desired.version === 3 && desired.streak === streak ? desired : { ...desired, version: 3, streak };
+  const version = desired.profile.exchangeRates ? 4 : 3;
+  return desired.version === version && desired.streak === streak ? desired : { ...desired, version, streak };
 }
 
 export default function App() {
@@ -172,7 +153,6 @@ export default function App() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [pendingImport, setPendingImport] = useState<AppData | null>(null);
   const [categoryBudgetsOpen, setCategoryBudgetsOpen] = useState(false);
-  const [pdfBusy, setPdfBusy] = useState(false);
   const [avatarSource, setAvatarSource] = useState<{
     file?: File;
     src?: string;
@@ -223,8 +203,9 @@ export default function App() {
         analyticsEnabled ? data.transactions : [],
         month,
         currency,
+        data.profile.exchangeRates,
       ),
-    [data.transactions, month, currency, analyticsEnabled],
+    [data.transactions, month, currency, data.profile.exchangeRates, analyticsEnabled],
   );
   const { transactions } = summary;
   const deferredSearch = useDeferredValue(search);
@@ -240,8 +221,9 @@ export default function App() {
         page === "tracker" ? (allTime ? data.transactions : transactions) : [],
         sort,
         currency,
+        data.profile.exchangeRates,
       ),
-    [page, allTime, data.transactions, transactions, sort, currency],
+    [page, allTime, data.transactions, transactions, sort, currency, data.profile.exchangeRates],
   );
   const filtered = useMemo(
     () =>
@@ -342,13 +324,28 @@ export default function App() {
     }
   }
   function convertedBudget(amount: number, from: Currency, to: Currency) {
-    const converted = Math.round(convertAmount(amount, from, to) * 100) / 100;
+    const converted = Math.round(convertAmount(amount, from, to, data.profile.exchangeRates) * 100) / 100;
     if (!Number.isFinite(converted) || converted > MAX_AMOUNT) {
       throw new Error(
         "После смены валюты бюджет превышает допустимый максимум. Сначала уменьшите бюджет.",
       );
     }
     return converted;
+  }
+  function saveExchangeRates(base: ExchangeRates | undefined, next: ExchangeRates): boolean {
+    const saved = setData((current) => {
+      const { exchangeRates: _rates, ...originalProfile } = current.profile;
+      return {
+        ...current,
+        profile: mergeProfileDraft(
+          { ...originalProfile, ...(base ? { exchangeRates: base } : {}) },
+          current.profile,
+          { ...current.profile, exchangeRates: next },
+        ),
+      };
+    });
+    if (saved) setToast({ message: settingsCopy[language].ratesSaved });
+    return Boolean(saved);
   }
   function saveTransaction(value: Transaction) {
     const editing = modal !== "new";
@@ -395,163 +392,6 @@ export default function App() {
         : editing
           ? tr("Изменения сохранены")
           : tr("Расход добавлен. Всё под контролем!"),
-      pirate: increase?.promoted,
-    });
-    return true;
-  }
-  function commitShoppingChange(
-    change: (current: AppData) => AppData,
-  ): AppData | null {
-    return mutateData(change);
-  }
-  function addPlannedItem(title: string, itemCurrency: Currency): boolean {
-    return Boolean(
-      commitShoppingChange((current) =>
-        addShoppingItem(current, {
-          id: createRecordId(),
-          title,
-          currency: itemCurrency,
-          createdAt: todayString(),
-        }),
-      ),
-    );
-  }
-  function checkShoppingBase(
-    current: AppData,
-    id: string,
-    base: Transaction | null | undefined,
-    patch: Partial<Transaction>,
-  ) {
-    if (base === undefined) return;
-    const row = current.shoppingList?.find((item) => item.id === id);
-    if (!row) throw new DataConflictError();
-    const record = current.transactions.find((t) => t.id === row.transactionId);
-    if ((record?.id ?? null) !== (base?.id ?? null))
-      throw new DataConflictError();
-    if (record && base)
-      for (const field of Object.keys(patch) as (keyof Transaction)[]) {
-        if (record[field] !== base[field] && record[field] !== patch[field])
-          throw new DataConflictError();
-      }
-  }
-  function updatePlannedItem(
-    id: string,
-    patch: { title?: string; currency?: Currency },
-    base?: Transaction | null,
-  ): boolean {
-    return Boolean(
-      commitShoppingChange((current) => {
-        checkShoppingBase(current, id, base, patch);
-        return updateShoppingItem(current, id, patch);
-      }),
-    );
-  }
-  function savePlannedPrice(
-    id: string,
-    amount: number,
-    itemCurrency: Currency,
-    base?: Transaction | null,
-    changed?: { amount?: number; currency?: Currency },
-  ): boolean {
-    const eventId = createRecordId();
-    const event: { increase: ReturnType<typeof getStreakIncrease> } = { increase: null };
-    const next = commitShoppingChange((current) => {
-      event.increase = null;
-      const now = new Date();
-      checkShoppingBase(
-        current,
-        id,
-        base,
-        changed ?? { amount, currency: itemCurrency },
-      );
-      const row = current.shoppingList?.find((item) => item.id === id);
-      const record = current.transactions.find(
-        (t) => t.id === row?.transactionId,
-      );
-      const desired = saveShoppingPrice(
-        current,
-        id,
-        changed && changed.amount === undefined && record
-          ? record.amount
-          : amount,
-        changed && changed.currency === undefined && record
-          ? record.currency
-          : itemCurrency,
-        eventId,
-        now,
-      );
-      if (desired.transactions.length > current.transactions.length) event.increase = getStreakIncrease(
-        getTrackingStats(current.transactions, current.streak, now),
-        getTrackingStats(desired.transactions, current.streak, now),
-      );
-      return desired;
-    });
-    if (!next) return false;
-    const increase = event.increase;
-    setBountyCelebration(
-      increase
-        ? { ...increase, id: eventId, expiresAt: Date.now() + 6000, page }
-        : null,
-    );
-    if (increase?.promoted) {
-      setToast({
-        message: `${language === "en" ? "New pirate rank" : "Новый пиратский ранг"}: ${increase.rank.name[language]}!`,
-        pirate: true,
-      });
-    }
-    return true;
-  }
-  function removePlannedItem(id: string): boolean {
-    return Boolean(
-      commitShoppingChange((current) => removeShoppingItem(current, id)),
-    );
-  }
-  function confirmPlannedPurchase(
-    id: string,
-    purchase: ShoppingPurchaseConfirmation,
-  ): boolean {
-    const eventId = createRecordId();
-    const event: { increase: ReturnType<typeof getStreakIncrease> } = { increase: null };
-    const next = commitShoppingChange((current) => {
-      event.increase = null;
-      const now = new Date();
-      checkShoppingBase(current, id, purchase.base, purchase.changed);
-      const row = current.shoppingList?.find((item) => item.id === id);
-      const record = current.transactions.find(
-        (t) => t.id === row?.transactionId,
-      );
-      const desired = confirmShoppingPurchase(
-        current,
-        id,
-        purchase.changed.amount === undefined && record
-          ? record.amount
-          : purchase.amount,
-        purchase.changed.currency === undefined
-          ? (record?.currency ?? row?.currency ?? purchase.currency)
-          : purchase.currency,
-        eventId,
-        now,
-        purchase.changed.title === undefined
-          ? undefined
-          : { title: purchase.title },
-      );
-      if (desired.transactions.length > current.transactions.length) event.increase = getStreakIncrease(
-        getTrackingStats(current.transactions, current.streak, now),
-        getTrackingStats(desired.transactions, current.streak, now),
-      );
-      return desired;
-    });
-    if (!next) return false;
-    const increase = event.increase;
-    setBountyCelebration(
-      increase
-        ? { ...increase, id: eventId, expiresAt: Date.now() + 6000, page }
-        : null,
-    );
-    setToast({
-      message: increase?.promoted
-        ? `${tr("Покупка подтверждена. Расход сохранён.")} ${language === "en" ? "New pirate rank" : "Новый пиратский ранг"}: ${increase.rank.name[language]}!`
-        : tr("Покупка подтверждена. Расход сохранён."),
       pirate: increase?.promoted,
     });
     return true;
@@ -644,37 +484,13 @@ export default function App() {
       },
     });
   }
-  async function downloadPdf(records: Transaction[], backup = false) {
-    if (pdfBusy) return;
-    setPdfBusy(true);
-    try {
-      const { exportPdf } = await import("./lib/pdf");
-      await exportPdf(data, {
-        transactions: records,
-        language,
-        currency,
-        title: backup
-          ? tr("PDF-копия со всеми данными")
-          : tr("Журнал расходов"),
-        period:
-          backup || allTime ? tr("За всё время") : monthLabel(month, language),
-        includeBackup: backup,
-      });
-      setToast({
-        message: backup ? "Резервная копия скачана" : "PDF-отчёт скачан",
-      });
-    } catch {
-      setToast({
-        message: "Не удалось создать PDF. Попробуйте ещё раз.",
-        error: true,
-      });
-    } finally {
-      setPdfBusy(false);
-    }
-  }
-  function exportBackup() {
-    void downloadPdf(data.transactions, true);
-  }
+  const { pdfBusy, exportPdf: downloadPdf, exportJson, exportCsv, importBackup } = useDataTransfer({
+    data, language, month, allTime, onToast: setToast, onImport: setPendingImport,
+  });
+  const { addPlannedItem, updatePlannedItem, savePlannedPrice, removePlannedItem, confirmPlannedPurchase } = useShoppingActions({
+    mutateData, page, language, setToast, setBountyCelebration,
+  });
+  function exportBackup() { void downloadPdf(data.transactions, true); }
   function saveCategoryBudgets(
     base: CategoryBudget[],
     next: CategoryBudget[],
@@ -720,7 +536,7 @@ export default function App() {
     setToast({ message: "Шаблон удалён" });
     return true;
   }
-  function exportReport() {
+  function reportRecords() {
     const report =
       page === "tracker" && search !== deferredSearch
         ? filterExpenses(
@@ -731,31 +547,10 @@ export default function App() {
             hasQuery ? searchIndex : indexExpenseText(data.transactions),
           )
         : filtered;
-    void downloadPdf(page === "tracker" ? report : transactions);
+    return page === "tracker" ? report : transactions;
   }
-  async function importBackup(file?: File) {
-    if (!file) return;
-    if (file.size > 40 * 1024 * 1024) {
-      setToast({
-        message: "Файл слишком большой. Максимум — 40 МБ.",
-        error: true,
-      });
-      return;
-    }
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const pdf = new TextDecoder().decode(bytes.subarray(0, 5)) === "%PDF-";
-      const incoming = pdf
-        ? await (await import("./lib/pdf")).readPdfBackup(bytes)
-        : validateBackup(JSON.parse(new TextDecoder().decode(bytes)));
-      setPendingImport(incoming);
-    } catch {
-      setToast({
-        message: "Выберите PDF-копию BeliLog или старый JSON-файл.",
-        error: true,
-      });
-    }
-  }
+  function exportReport() { void downloadPdf(reportRecords()); }
+  function exportCsvReport() { exportCsv(reportRecords()); }
   function restoreBackup(replaceAll: boolean) {
     if (!pendingImport) return;
     setBountyCelebration(null);
@@ -873,6 +668,31 @@ export default function App() {
     .join("")
     .toUpperCase();
 
+  function saveEntryDetails(value: Transaction): boolean {
+    if (!detailRecord) return false;
+    return Boolean(setData((current) => {
+      const record = mergeTransactionDraft(detailRecord, current.transactions.find((entry) => entry.id === value.id), value);
+      return { ...current, transactions: current.transactions.map((entry) => entry.id === value.id ? record : entry) };
+    }));
+  }
+  function confirmReplacement() {
+    if (confirmation === "recovery") {
+      if (!commit(data, true)) return;
+      setConfirmation(null);
+      setToast({ message: "Копия восстановлена" });
+    } else if (confirmation === "reset") {
+      setBountyCelebration(null);
+      if (!commit(createEmptyData(), true)) return;
+      setProfile(createEmptyData().profile);
+      setMonth(currentMonth());
+      setSearch("");
+      setCategory("all");
+      setFilterCurrency("all");
+      setShowDemoBanner(true);
+      setConfirmation(null);
+      setToast({ message: "Данные удалены. Можно начать заново." });
+    } else if (confirmation === "demo") applyDemo();
+  }
   const emptyState = (isFiltered = false) => (
     <div className="empty-state">
       <span className="empty-icon">
@@ -1218,6 +1038,7 @@ export default function App() {
                   {page === "tracker" && (
                     <TrackerPage
                       filtered={filtered}
+                      rates={data.profile.exchangeRates}
                       language={language}
                       currency={currency}
                       search={search}
@@ -1246,6 +1067,7 @@ export default function App() {
                       onEdit={setModal}
                       onDelete={deleteTransaction}
                       onExport={exportReport}
+                      onExportCsv={exportCsvReport}
                       onProfile={() => navigate("profile")}
                     />
                   )}
@@ -1277,6 +1099,7 @@ export default function App() {
                         commitProfileFields({ avatar: undefined });
                       }}
                       onCurrencyChange={updateCurrency}
+                      onExchangeRatesSave={saveExchangeRates}
                       onThemeChange={(theme) => {
                         commitProfileFields({ theme });
                       }}
@@ -1284,6 +1107,8 @@ export default function App() {
                         commitProfileFields({ language: next });
                       }}
                       onExport={exportBackup}
+                      onExportJson={exportJson}
+                      onExportCsv={() => exportCsv(data.transactions)}
                       onImport={(file) => {
                         void importBackup(file);
                       }}
@@ -1299,242 +1124,19 @@ export default function App() {
             </div>
           </main>
         </div>
-        {categoryBudgetsOpen && (
-          <Modal
-            label={tr("Лимиты категорий")}
-            className="category-budgets-modal"
-            onClose={() => setCategoryBudgetsOpen(false)}
-          >
-            <FeatureBoundary language={language}>
-              <Suspense fallback={<LoadingState />}>
-                <CategoryBudgetsDialog
-                  budgets={data.categoryBudgets ?? []}
-                  defaultCurrency={currency}
-                  language={language}
-                  onSave={saveCategoryBudgets}
-                  onClose={() => setCategoryBudgetsOpen(false)}
-                />
-              </Suspense>
-            </FeatureBoundary>
-          </Modal>
-        )}
-        {avatarSource && (
-          <Modal
-            className="avatar-crop-modal"
-            label={tr("Редактор аватара")}
-            onClose={() => setAvatarSource(null)}
-          >
-            <FeatureBoundary language={language}>
-              <Suspense fallback={<LoadingState />}>
-                <AvatarCropper
-                  {...avatarSource}
-                  language={language}
-                  onSave={saveAvatar}
-                  onClose={() => setAvatarSource(null)}
-                />
-              </Suspense>
-            </FeatureBoundary>
-          </Modal>
-        )}
-        {detailRecord && !modal && (
-          <Modal className="detail-modal" onClose={() => setDetailId(null)}>
-            <FeatureBoundary language={language}>
-              <Suspense fallback={<LoadingState />}>
-                <EntryDetails
-                  transaction={detailRecord}
-                  language={language}
-                  onClose={() => setDetailId(null)}
-                  onEdit={() => {
-                    setModal(detailRecord);
-                    setDetailId(null);
-                  }}
-                  onExport={() => {
-                    void downloadPdf([detailRecord]);
-                  }}
-                  onChange={(value) => {
-                    return Boolean(
-                      setData((d) => {
-                        const record = mergeTransactionDraft(
-                          detailRecord,
-                          d.transactions.find((t) => t.id === value.id),
-                          value,
-                        );
-                        return {
-                          ...d,
-                          transactions: d.transactions.map((t) =>
-                            t.id === value.id ? record : t,
-                          ),
-                        };
-                      }),
-                    );
-                  }}
-                />
-              </Suspense>
-            </FeatureBoundary>
-          </Modal>
-        )}
-        {pendingImport && (
-          <Modal onClose={() => setPendingImport(null)}>
-            <div className="dialog-header">
-              <div>
-                <h2>{tr("Копия проверена")}</h2>
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={tr("Закрыть")}
-                onClick={() => setPendingImport(null)}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <p className="modal-description">
-              {tr(
-                "Выберите, как восстановить данные. Текущие записи можно объединить с копией.",
-              )}
-            </p>
-            <p className="field-hint">
-              {tr(
-                "Восстановить всё заменит все данные BeliLog содержимым копии.",
-              )}
-            </p>
-            <div className="import-summary">
-              <strong>{pendingImport.transactions.length}</strong>{" "}
-              {tr("записей")} · {pendingImport.profile.name}
-              {Boolean(pendingImport.shoppingList?.length) && (
-                <span>
-                  {" "}
-                  · {tr("Список покупок")}: {pendingImport.shoppingList!.length}
-                </span>
-              )}
-              {Boolean(pendingImport.categoryBudgets?.length) && (
-                <span>
-                  {" "}
-                  · {tr("Лимиты")}: {pendingImport.categoryBudgets!.length}
-                </span>
-              )}
-              {Boolean(pendingImport.shoppingTemplates?.length) && (
-                <span>
-                  {" "}
-                  · {tr("Шаблоны")}: {pendingImport.shoppingTemplates!.length}
-                </span>
-              )}
-            </div>
-            <div className="import-actions">
-              <Button onClick={() => restoreBackup(false)}>
-                <Plus size={16} />
-                {tr("Добавить записи")}
-              </Button>
-              <Button variant="primary" onClick={() => restoreBackup(true)}>
-                <Upload size={16} />
-                {tr("Восстановить всё")}
-              </Button>
-            </div>
-            <Button variant="ghost" onClick={() => setPendingImport(null)}>
-              {tr("Отмена")}
-            </Button>
-          </Modal>
-        )}
-        {modal && (
-          <Modal onClose={() => setModal(null)}>
-            <FeatureBoundary language={language}>
-              <Suspense fallback={<LoadingState />}>
-                <TransactionDialog
-                  key={modal === "new" ? "new" : JSON.stringify(modal)}
-                  value={modal === "new" ? null : modal}
-                  defaultCurrency={currency}
-                  onClose={() => setModal(null)}
-                  onSave={saveTransaction}
-                  onReload={
-                    modal === "new"
-                      ? undefined
-                      : () => {
-                          const current = data.transactions.find(
-                            (t) => t.id === modal.id,
-                          );
-                          setModal(current ?? null);
-                        }
-                  }
-                />
-              </Suspense>
-            </FeatureBoundary>
-          </Modal>
-        )}
-        {confirmation && (
-          <Modal onClose={() => setConfirmation(null)}>
-            <div className="dialog-header">
-              <div>
-                <h2>
-                  {confirmation === "recovery"
-                    ? tr("Восстановить последнюю копию?")
-                    : confirmation === "reset"
-                      ? tr("Начать с чистого листа?")
-                      : tr("Загрузить демо?")}
-                </h2>
-              </div>
-              <button
-                className="icon-button modal-close"
-                onClick={() => setConfirmation(null)}
-                aria-label={tr("Закрыть")}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <p className="modal-description">
-              {confirmation === "recovery"
-                ? tr(
-                    "Повреждённые данные будут сохранены отдельно. Рабочая копия снова станет доступна для изменений.",
-                  )
-                : confirmation === "reset"
-                  ? tr(
-                      "Все данные BeliLog будут удалены из этого браузера. Перед удалением можно скачать резервную копию.",
-                    )
-                  : tr(
-                      "Демо заменит все данные BeliLog. Скачайте копию, чтобы вернуться к своим данным.",
-                    )}
-            </p>
-            <div className="confirmation-backup">
-              <Button onClick={exportBackup}>
-                <Download size={16} />
-                {tr("Скачать копию перед заменой")}
-              </Button>
-            </div>
-            <div className="dialog-footer">
-              <Button onClick={() => setConfirmation(null)}>
-                {tr("Отмена")}
-              </Button>
-              <Button
-                variant={confirmation === "reset" ? "danger" : "primary"}
-                onClick={() => {
-                  if (confirmation === "recovery") {
-                    if (!commit(data, true)) return;
-                    setConfirmation(null);
-                    setToast({ message: "Копия восстановлена" });
-                  } else if (confirmation === "reset") {
-                    setBountyCelebration(null);
-                    if (!commit(createEmptyData(), true)) return;
-                    setProfile(createEmptyData().profile);
-                    setMonth(currentMonth());
-                    setSearch("");
-                    setCategory("all");
-                    setFilterCurrency("all");
-                    setShowDemoBanner(true);
-                    setConfirmation(null);
-                    setToast({
-                      message: "Данные удалены. Можно начать заново.",
-                    });
-                  } else applyDemo();
-                }}
-              >
-                {confirmation === "recovery"
-                  ? tr("Восстановить копию")
-                  : confirmation === "reset"
-                    ? tr("Удалить все данные")
-                    : tr("Загрузить демо")}
-              </Button>
-            </div>
-          </Modal>
-        )}
+        <AppDialogs data={data} currency={currency} language={language}
+          categoryBudgetsOpen={categoryBudgetsOpen} onCategoryBudgetsClose={() => setCategoryBudgetsOpen(false)}
+          onCategoryBudgetsSave={saveCategoryBudgets}
+          avatarSource={avatarSource} onAvatarClose={() => setAvatarSource(null)} onAvatarSave={saveAvatar}
+          detailRecord={detailRecord} onDetailsClose={() => setDetailId(null)}
+          onDetailsEdit={() => { if (detailRecord) setModal(detailRecord); setDetailId(null); }}
+          onDetailsExport={() => { if (detailRecord) void downloadPdf([detailRecord]); }} onDetailsChange={saveEntryDetails}
+          pendingImport={pendingImport} onImportClose={() => setPendingImport(null)} onRestoreBackup={restoreBackup}
+          modal={modal} onTransactionClose={() => setModal(null)} onTransactionSave={saveTransaction}
+          onTransactionReload={() => { if (modal && modal !== "new") setModal(data.transactions.find((record) => record.id === modal.id) ?? null); }}
+          confirmation={confirmation} onConfirmationClose={() => setConfirmation(null)}
+          onConfirmationConfirm={confirmReplacement} onBackupExport={exportBackup}
+        />
         {toast && (
           <div
             className={`toast ${toast.error ? "toast-error" : ""} ${toast.pirate ? "toast--pirate" : ""}`}

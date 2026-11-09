@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const env = { ...process.env, GITHUB_PAGES: 'true' };
-const url = env.BELILOG_URL ?? 'http://127.0.0.1:5175/FinanceControl/';
+const url = env.BELILOG_URL ?? 'http://127.0.0.1:5175/belilog/';
 const server = env.BELILOG_URL ? null : spawn(process.execPath,
   ['node_modules/vite/bin/vite.js', 'preview', '--host', '127.0.0.1', '--port', '5175', '--strictPort'],
   { env, stdio: 'inherit' });
@@ -29,6 +29,7 @@ try {
   await run('tests/planning-browser.mjs');
   await run('tests/design-browser.mjs');
   await run('tests/streak-browser.mjs');
+  await run('tests/portability-browser.mjs');
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

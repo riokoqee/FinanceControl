@@ -1,4 +1,4 @@
-import type { Transaction } from './finance';
+import type { Transaction } from '../finance';
 import { BERRIES_PER_DAY } from './streak';
 import type { StreakStats } from './streak';
 import { isTrackingDate } from './streakTypes';

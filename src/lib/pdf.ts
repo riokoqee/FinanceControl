@@ -11,6 +11,7 @@ import {
   rgb,
 } from 'pdf-lib';
 import type { PDFPage } from 'pdf-lib';
+import { getRateLabel } from './currency';
 import {
   CATEGORIES,
   convertAmount,
@@ -58,7 +59,6 @@ const COPY = {
     records: 'Записей',
     total: 'Итого',
     original: 'В исходных валютах',
-    rates: 'Условный пересчёт: 1 USD = 0,92 EUR = 480 KZT.',
     rateNote: 'Суммы пересчёта приведены для ориентира.',
     note: 'Заметка',
     items: 'Состав покупки',
@@ -84,7 +84,6 @@ const COPY = {
     records: 'Entries',
     total: 'Total',
     original: 'In original currencies',
-    rates: 'Illustrative rates: 1 USD = 0.92 EUR = 480 KZT.',
     rateNote: 'Converted amounts are estimates for reference.',
     note: 'Note',
     items: 'Purchase details',
@@ -232,7 +231,7 @@ export async function buildPdf(data: AppData, options: PdfOptions = {}): Promise
   paragraph(`${copy.period}: ${options.period || copy.allTime}`, 10, COLORS.muted, 0, 1);
   paragraph(`${copy.records}: ${transactions.length}`, 10, COLORS.muted, 0, 12);
 
-  const total = transactions.reduce((sum, transaction) => sum + convertAmount(transaction.amount, transaction.currency, currency), 0);
+  const total = transactions.reduce((sum, transaction) => sum + convertAmount(transaction.amount, transaction.currency, currency, safeData.profile.exchangeRates), 0);
   paired(copy.total, money(total, currency, language), 17);
   paragraph(copy.original, 9, COLORS.muted, 0, 2);
   for (const originalCurrency of ['USD', 'EUR', 'KZT'] as const) {
@@ -241,7 +240,7 @@ export async function buildPdf(data: AppData, options: PdfOptions = {}): Promise
       paired(originalCurrency, money(originalTransactions.reduce((sum, transaction) => sum + transaction.amount, 0), originalCurrency, language), 10);
     }
   }
-  paragraph(`${copy.rates} ${copy.rateNote}`, 8, COLORS.muted, 0, 7);
+  paragraph(`${getRateLabel(safeData.profile.exchangeRates, language)}. ${copy.rateNote}`, 8, COLORS.muted, 0, 7);
   divider();
 
   if (!transactions.length) paragraph(copy.empty, 11, COLORS.muted, 0, 15);

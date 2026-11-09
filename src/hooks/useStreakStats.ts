@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from "react";
-import type { Transaction } from "./finance";
-import { todayString } from "./finance";
-import { getTrackingStats } from "./streakLedger";
-import type { TrackingStats } from "./streakLedger";
-import type { StreakLedger } from "./streakTypes";
+import type { Transaction } from "../lib/finance";
+import { todayString } from "../lib/finance";
+import { getTrackingStats } from "../lib/streak/streakLedger";
+import type { TrackingStats } from "../lib/streak/streakLedger";
+import type { StreakLedger } from "../lib/streak/streakTypes";
 
 const subscribers = new Set<() => void>();
 let timeout: ReturnType<typeof setTimeout> | undefined;

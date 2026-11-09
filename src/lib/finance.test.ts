@@ -20,7 +20,92 @@ import {
   todayString,
   validateBackup,
 } from './finance';
-import type { StreakLedger } from './streakTypes';
+import type { StreakLedger } from './streak/streakTypes';
+import { REFERENCE_RATES } from './currency';
+import type { ExchangeRates } from './currency';
+
+describe('version-four manual currency settings', () => {
+  const rates: ExchangeRates = { USD: 1, EUR: 0.96, KZT: 510.123456 };
+  const withRates = () => {
+    const data = createEmptyData();
+    return { ...data, profile: { ...data.profile, exchangeRates: { ...rates } } };
+  };
+
+  it('upgrades only profiles with explicit rates and copies the validated values', () => {
+    const source = withRates();
+    const restored = validateBackup(source);
+    expect(restored.version).toBe(4);
+    expect(restored.profile.exchangeRates).toEqual(rates);
+    expect(restored.profile.exchangeRates).not.toBe(source.profile.exchangeRates);
+    expect(source.version).toBe(1);
+    expect(validateBackup(JSON.stringify(restored))).toEqual(restored);
+  });
+
+  it('accepts version four with optional tracking history, while version three still requires it', () => {
+    expect(validateBackup({ ...withRates(), version: 4 }).streak).toBeUndefined();
+    const streak: StreakLedger = { version: 1, startedOn: '2026-11-09', confirmedDays: [] };
+    expect(validateBackup({ ...withRates(), version: 4, streak })).toMatchObject({ version: 4, streak });
+    expect(() => validateBackup({ ...createEmptyData(), version: 4 })).toThrow(/формат/);
+    expect(() => validateBackup({ ...withRates(), version: 3 })).toThrow(/формат/);
+    expect(() => validateBackup({ ...withRates(), version: 5, streak })).toThrow(/формат/);
+  });
+
+  it('keeps legacy versions and field absence intact until manual rates are saved', () => {
+    for (const version of [1, 2] as const) {
+      const legacy = { ...createEmptyData(), version };
+      expect(validateBackup(legacy)).toEqual(legacy);
+      expect(Object.hasOwn(validateBackup(legacy).profile, 'exchangeRates')).toBe(false);
+    }
+    const legacy = { ...createEmptyData(), version: 3 as const,
+      streak: { version: 1 as const, startedOn: '2026-11-09', confirmedDays: [] } };
+    expect(validateBackup(legacy)).toEqual(legacy);
+    expect(validateBackup({ ...legacy, profile: { ...legacy.profile, exchangeRates: rates } }).version).toBe(4);
+  });
+
+  it.each([
+    undefined, null, [], {}, { USD: 1, EUR: 0.96 },
+    { USD: 2, EUR: 0.96, KZT: 510 }, { USD: 1, EUR: 0, KZT: 510 },
+    { USD: 1, EUR: -1, KZT: 510 }, { USD: 1, EUR: '0.96', KZT: 510 },
+    { USD: 1, EUR: 0.96, KZT: NaN }, { USD: 1, EUR: Infinity, KZT: 510 },
+    { USD: 1, EUR: 0.0000001, KZT: 510 }, { USD: 1, EUR: 0.9600001, KZT: 510 },
+    { USD: 1, EUR: 0.96, KZT: 1_000_001 }, { USD: 1, EUR: 0.96, KZT: 510, RUB: 90 },
+    Object.create({ USD: 1, EUR: 0.96, KZT: 510 }),
+    JSON.parse('{"USD":1,"EUR":0.96,"KZT":510,"__proto__":{"polluted":true}}'),
+  ].map((value) => [value]))('rejects explicitly damaged rates rather than replacing them silently', (exchangeRates) => {
+    const data = createEmptyData();
+    expect(() => validateBackup({ ...data, profile: { ...data.profile, exchangeRates } })).toThrow(/Курс/);
+  });
+
+  it('uses the same USD base for every cross-currency pair, preserving full precision', () => {
+    const manual: ExchangeRates = { USD: 1, EUR: 0.96, KZT: 510 };
+    expect(convertAmount(100, 'USD', 'EUR', manual)).toBeCloseTo(96);
+    expect(convertAmount(100, 'USD', 'KZT', manual)).toBeCloseTo(51_000);
+    expect(convertAmount(96, 'EUR', 'USD', manual)).toBeCloseTo(100);
+    expect(convertAmount(96, 'EUR', 'KZT', manual)).toBeCloseTo(51_000);
+    expect(convertAmount(51_000, 'KZT', 'USD', manual)).toBeCloseTo(100);
+    expect(convertAmount(51_000, 'KZT', 'EUR', manual)).toBeCloseTo(96);
+    expect(convertAmount(1.234567, 'EUR', 'EUR', manual)).toBe(1.234567);
+    expect(convertAmount(1, 'USD', 'KZT', rates)).toBe(510.123456);
+    expect(convertAmount(1, 'USD', 'EUR')).toBe(REFERENCE_RATES.EUR);
+    expect(convertAmount(convertAmount(123.45, 'EUR', 'KZT', rates), 'KZT', 'EUR', rates)).toBeCloseTo(123.45, 10);
+  });
+
+  it('converts only the selected monthly view without rewriting historical original amounts', () => {
+    const source = { ...withRates(), transactions: [
+      { id: 'usd', title: 'USD', amount: 100, currency: 'USD' as const, category: 'food' as const, date: '2026-11-01' },
+      { id: 'eur', title: 'EUR', amount: 96, currency: 'EUR' as const, category: 'food' as const, date: '2026-11-02' },
+      { id: 'kzt', title: 'KZT', amount: 51_000, currency: 'KZT' as const, category: 'food' as const, date: '2026-11-03' },
+      { id: 'old', title: 'Old', amount: 10, currency: 'USD' as const, category: 'food' as const, date: '2026-10-31' },
+    ] };
+    const before = JSON.stringify(source);
+    const manual: ExchangeRates = { USD: 1, EUR: 0.96, KZT: 510 };
+    expect(getMonthTotal(source.transactions, '2026-11', 'USD', manual)).toBeCloseTo(300);
+    expect(getMonthTotal(source.transactions, '2026-11', 'EUR', manual)).toBeCloseTo(288);
+    expect(getMonthTotal(source.transactions, '2026-11', 'KZT', manual)).toBeCloseTo(153_000);
+    expect(validateBackup(source).transactions).toEqual(source.transactions);
+    expect(JSON.stringify(source)).toBe(before);
+  });
+});
 
 describe('version-three accounting-day backups', () => {
   const streak = (): StreakLedger => ({

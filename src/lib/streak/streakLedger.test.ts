@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Transaction } from './finance';
+import type { Transaction } from '../finance';
 import { getStreakStats } from './streak';
 import {
   canConfirmTrackingDay, confirmNoSpend, confirmTrackingDay,

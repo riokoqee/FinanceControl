@@ -1,10 +1,10 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Check, CircleDashed, Leaf, Minus, Snowflake } from "lucide-react";
 import type { Language, Transaction } from "../lib/finance";
-import { getTrackingDays } from "../lib/streakLedger";
-import type { StreakLedger, TrackingDayStatus } from "../lib/streakTypes";
-import { streakCopy } from "../lib/streakCopy";
-import { useLocalCalendarDay } from "../lib/useStreakStats";
+import { getTrackingDays } from "../lib/streak/streakLedger";
+import type { StreakLedger, TrackingDayStatus } from "../lib/streak/streakTypes";
+import { streakCopy } from "../lib/streak/streakCopy";
+import { useLocalCalendarDay } from "../hooks/useStreakStats";
 import "./StreakDays.css";
 
 const icons = { LOGGED: Check, NO_SPEND: Leaf, FROZEN: Snowflake, MISSED: Minus, PENDING: CircleDashed };

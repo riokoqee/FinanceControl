@@ -1,11 +1,11 @@
-// Run against a built preview: BELILOG_URL=http://127.0.0.1:5175/FinanceControl/ node tests/planning-browser.mjs
+// Run against a built preview: BELILOG_URL=http://127.0.0.1:5175/belilog/ node tests/planning-browser.mjs
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 
-const baseUrl = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/FinanceControl/';
+const baseUrl = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/belilog/';
 const storageKey = 'finance-control:data:v1';
 const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date());
 const month = today.slice(0, 7);

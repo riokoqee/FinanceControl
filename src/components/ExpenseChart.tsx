@@ -1,8 +1,8 @@
 import { memo, useId, useMemo, useState } from "react";
 import { convertAmount, formatMoney } from "../lib/finance";
-import type { Currency, Language, Transaction } from "../lib/finance";
+import type { Currency, ExchangeRates, Language, Transaction } from "../lib/finance";
 import { translate } from "../lib/i18n";
-import { useLocalCalendarDay } from "../lib/useStreakStats";
+import { useLocalCalendarDay } from "../hooks/useStreakStats";
 
 export interface ExpenseChartProps {
   transactions: Transaction[];
@@ -10,6 +10,7 @@ export interface ExpenseChartProps {
   range: "month" | "week";
   currency: Currency;
   language: Language;
+  rates?: ExchangeRates;
 }
 
 export default memo(function ExpenseChart({
@@ -18,6 +19,7 @@ export default memo(function ExpenseChart({
   range,
   currency,
   language,
+  rates,
 }: ExpenseChartProps) {
   const tr = (text: string) => translate(language, text);
   const locale = language === "en" ? "en-US" : "ru-RU";
@@ -29,7 +31,7 @@ export default memo(function ExpenseChart({
   const values = useMemo(() => {
     const totals = new Map<string, number>();
     for (const transaction of transactions) {
-      totals.set(transaction.date, (totals.get(transaction.date) ?? 0) + convertAmount(transaction.amount, transaction.currency, currency));
+      totals.set(transaction.date, (totals.get(transaction.date) ?? 0) + convertAmount(transaction.amount, transaction.currency, currency, rates));
     }
     const formatter = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" });
     return Array.from({ length: last - first + 1 }, (_, index) => {
@@ -38,7 +40,7 @@ export default memo(function ExpenseChart({
       const total = totals.get(date) ?? 0;
       return { day, date, total, label: formatter.format(new Date(`${date}T12:00:00`)), money: formatMoney(total, currency, language) };
     });
-  }, [transactions, currency, month, first, last, locale, language]);
+  }, [transactions, currency, rates, month, first, last, locale, language]);
   const selectionKey = `${month}:${range}`;
   const [selection, setSelection] = useState({ key: selectionKey, index: end - first });
   const [hover, setHover] = useState<{ key: string; index: number } | null>(null);

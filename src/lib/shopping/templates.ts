@@ -6,7 +6,7 @@ import {
   validateBackup,
   type AppData,
   type ShoppingTemplate,
-} from './finance';
+} from '../finance';
 
 const MAX_SHOPPING_ITEMS = 1_000;
 const makeId = () => globalThis.crypto?.randomUUID?.() ??

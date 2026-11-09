@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
 
-const baseUrl = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/FinanceControl/';
+const baseUrl = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/belilog/';
 const key = 'finance-control:data:v1';
 const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date());
 const axePath = createRequire(import.meta.url).resolve('axe-core/axe.min.js');

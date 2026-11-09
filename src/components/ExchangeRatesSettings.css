@@ -1,0 +1,8 @@
+.exchange-rates-settings { min-width: 0; margin: 24px 0 0; padding: 20px 0 0; border: 0; border-top: 1px solid var(--border); }
+.exchange-rates-settings legend { float: left; width: 100%; margin: 0 0 8px; padding: 0; color: var(--text); font-size: 14px; font-weight: 650; }
+.exchange-rates-settings > p { clear: both; margin: 0 0 12px; line-height: 1.6; }
+.exchange-rates-settings .form-row { margin-top: 16px; }
+.exchange-rates-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.exchange-rates-actions .button { min-height: 44px; white-space: normal; }
+.exchange-rates-error { color: var(--danger); font-size: 12px; }
+.exchange-rates-estimates { color: var(--text-muted); }

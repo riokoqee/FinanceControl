@@ -1,11 +1,11 @@
-// Run against a built preview: BELILOG_URL=http://127.0.0.1:5175/FinanceControl/ node tests/browser-regressions.mjs
+// Run against a built preview: BELILOG_URL=http://127.0.0.1:5175/belilog/ node tests/browser-regressions.mjs
 // Set CHROMIUM_PATH when using a system browser instead of Playwright's bundled Chromium.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 
-const baseUrl = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/FinanceControl/';
+const baseUrl = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/belilog/';
 const storageKey = 'finance-control:data:v1';
 const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date());
 const axePath = createRequire(import.meta.url).resolve('axe-core/axe.min.js');

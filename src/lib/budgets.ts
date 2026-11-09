@@ -1,5 +1,5 @@
 import { convertAmount } from './finance';
-import type { CategoryBudget, CategoryId, Transaction } from './finance';
+import type { CategoryBudget, CategoryId, ExchangeRates, Transaction } from './finance';
 
 export interface CategoryBudgetProgress extends CategoryBudget {
   spent: number;
@@ -16,6 +16,7 @@ export function summarizeCategoryBudgets(
   records: readonly Transaction[],
   budgets: readonly CategoryBudget[],
   month: string,
+  rates?: ExchangeRates,
 ): CategoryBudgetProgress[] {
   if (!budgets.length || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return [];
   const configured = budgets.filter((budget) => Number.isFinite(budget.amount) && Math.round(budget.amount * 100) > 0);
@@ -25,7 +26,7 @@ export function summarizeCategoryBudgets(
     const budget = byCategory.get(record.category);
     if (!budget || !record.date.startsWith(`${month}-`)) continue;
     totals.set(record.category,
-      (totals.get(record.category) ?? 0) + convertAmount(record.amount, record.currency, budget.currency));
+      (totals.get(record.category) ?? 0) + convertAmount(record.amount, record.currency, budget.currency, rates));
   }
   return configured.map((budget): CategoryBudgetProgress => {
     // Round after summing so multiple small converted purchases are not lost.

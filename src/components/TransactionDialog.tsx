@@ -18,7 +18,7 @@ import {
   getItemTotal,
 } from "../lib/finance";
 import type { CategoryId, Currency, Transaction } from "../lib/finance";
-import { parseMoney } from "../lib/storage";
+import { parseMoney } from "../lib/storage/storage";
 import { useI18n } from "../lib/i18n";
 import Button from "./Button";
 

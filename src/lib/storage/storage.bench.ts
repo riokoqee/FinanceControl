@@ -1,5 +1,5 @@
 import { bench, describe } from 'vitest';
-import { STORAGE_KEY, createEmptyData, type AppData } from './finance';
+import { STORAGE_KEY, createEmptyData, type AppData } from '../finance';
 import { commitStoredData } from './storage';
 
 // Run separately from correctness tests: npx vitest bench src/lib/storage.bench.ts --run

@@ -9,7 +9,7 @@ import {
   type AppData,
   type ShoppingItem,
   type ShoppingTemplate,
-} from './finance';
+} from '../finance';
 import { applyShoppingTemplate, makeShoppingTemplate } from './templates';
 
 const item = (id: string, title: string, patch: Partial<ShoppingItem> = {}): ShoppingItem => ({

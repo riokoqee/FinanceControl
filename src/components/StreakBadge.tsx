@@ -1,9 +1,9 @@
 import { memo } from "react";
 import { Flame } from "lucide-react";
 import type { Language, Transaction } from "../lib/finance";
-import { useStreakStats } from "../lib/useStreakStats";
-import type { StreakLedger } from "../lib/streakTypes";
-import { streakCopy, streakDayLabel, streakMessage } from "../lib/streakCopy";
+import { useStreakStats } from "../hooks/useStreakStats";
+import type { StreakLedger } from "../lib/streak/streakTypes";
+import { streakCopy, streakDayLabel, streakMessage } from "../lib/streak/streakCopy";
 import "./StreakBadge.css";
 
 export const dayLabel = streakDayLabel;

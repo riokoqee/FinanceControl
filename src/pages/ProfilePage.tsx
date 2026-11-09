@@ -4,7 +4,6 @@ import {
   ArrowUpRight,
   Camera,
   Check,
-  CircleHelp,
   Download,
   Monitor,
   Moon,
@@ -16,9 +15,11 @@ import {
   Upload,
   UserRound,
 } from "lucide-react";
-import { CURRENCIES, RATE_LABEL } from "../lib/finance";
-import type { AppData, Currency, Language, Profile } from "../lib/finance";
+import { CURRENCIES } from "../lib/finance";
+import type { AppData, Currency, ExchangeRates, Language, Profile } from "../lib/finance";
 import { translate } from "../lib/i18n";
+import ExchangeRatesSettings from "../components/ExchangeRatesSettings";
+import { settingsCopy } from "../lib/settingsCopy";
 import Button from "../components/Button";
 import ActivityCalendar from "../components/ActivityCalendar";
 import StreakBounty from "../components/StreakBounty";
@@ -42,6 +43,9 @@ interface ProfilePageProps {
   onCurrencyChange: (currency: Currency) => void;
   onThemeChange: (theme: Profile["theme"]) => void;
   onLanguageChange: (language: Language) => void;
+  onExchangeRatesSave: (base: ExchangeRates | undefined, next: ExchangeRates) => boolean;
+  onExportJson: () => void;
+  onExportCsv: () => void;
   onExport: () => void;
   onImport: (file?: File) => void;
   onDemo: () => void;
@@ -69,6 +73,9 @@ export default function ProfilePage({
   onCurrencyChange,
   onThemeChange,
   onLanguageChange,
+  onExchangeRatesSave,
+  onExportJson,
+  onExportCsv,
   onExport,
   onImport,
   onDemo,
@@ -251,17 +258,7 @@ export default function ProfilePage({
               </span>
             </label>
           </div>
-          <div className="rates-note">
-            <CircleHelp size={16} />
-            <p>
-              <strong>{tr(RATE_LABEL)}</strong>
-              <span>
-                {tr(
-                  "Курсы не обновляются. Расходы хранятся в исходной валюте.",
-                )}
-              </span>
-            </p>
-          </div>
+          <ExchangeRatesSettings rates={data.profile.exchangeRates} language={language} onSave={onExchangeRatesSave} />
         </div>
         <div className="settings-group">
           <h3>{tr("Тема оформления")}</h3>
@@ -333,9 +330,7 @@ export default function ProfilePage({
           </div>
           <h2>{tr("Данные")}</h2>
           <p>
-            {tr(
-              "Данные хранятся в браузере. Переносите их с PDF-копией.",
-            )}
+            {settingsCopy[language].localData}
           </p>
           <div className="storage-details">
             <div>
@@ -360,6 +355,8 @@ export default function ProfilePage({
               <Download size={16} />
               {tr("PDF-копия со всеми данными")}
             </Button>
+            <Button onClick={onExportJson}><Download size={16} />{settingsCopy[language].jsonBackup}</Button>
+            <Button onClick={onExportCsv}><Download size={16} />{settingsCopy[language].csvReport}</Button>
             <Button onClick={() => importRef.current?.click()}>
               <Upload size={16} />
               {tr("Импортировать PDF-копию")}

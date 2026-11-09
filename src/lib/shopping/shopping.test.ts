@@ -11,7 +11,7 @@ import {
   type AppData,
   type Currency,
   type ShoppingItem,
-} from './finance';
+} from '../finance';
 import {
   addShoppingItem,
   confirmShoppingPurchase,

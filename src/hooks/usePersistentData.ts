@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AppData } from "./finance";
-import { STORAGE_KEY } from "./finance";
+import type { AppData } from "../lib/finance";
+import { STORAGE_KEY } from "../lib/finance";
 import {
   commitStoredData,
   commitStoredMutation,
   readStoredData,
-} from "./storage";
+} from "../lib/storage/storage";
 
 type Change = AppData | ((current: AppData) => AppData);
 

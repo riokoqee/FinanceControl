@@ -1,12 +1,12 @@
 // Production regressions for persisted check-ins, automatic freezes and local days.
-// BELILOG_URL=http://127.0.0.1:5175/FinanceControl/ node tests/streak-browser.mjs
+// BELILOG_URL=http://127.0.0.1:5175/belilog/ node tests/streak-browser.mjs
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 
-const baseUrl = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/FinanceControl/';
+const baseUrl = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/belilog/';
 const key = 'finance-control:data:v1';
 const today = '2026-11-09';
 const now = '2026-11-09T12:00:00+01:00';

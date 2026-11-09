@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Transaction } from "./finance";
+import type { Transaction } from "../finance";
 import { BERRIES_PER_DAY, getStreakStats } from "./streak";
 
 function record(date: string, createdAt?: string): Transaction {

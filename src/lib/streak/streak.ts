@@ -1,5 +1,5 @@
-import { todayString } from "./finance";
-import type { Transaction } from "./finance";
+import { todayString } from "../finance";
+import type { Transaction } from "../finance";
 
 /** Fictional One Piece berries, separate from the user's expense currencies. */
 export const BERRIES_PER_DAY = 500_000;

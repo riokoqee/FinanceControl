@@ -1,12 +1,12 @@
 // Production regressions for bounded lists, deferred bundles and debounced persistence.
-// BELILOG_URL=http://127.0.0.1:5175/FinanceControl/ node tests/performance-regressions.mjs
+// BELILOG_URL=http://127.0.0.1:5175/belilog/ node tests/performance-regressions.mjs
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 import { PDFDocument } from 'pdf-lib';
 
-const baseUrl = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/FinanceControl/';
+const baseUrl = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/belilog/';
 const KEY = 'finance-control:data:v1';
 const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date());
 const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'],

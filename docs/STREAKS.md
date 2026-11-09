@@ -42,7 +42,9 @@ On adoption, existing expense creation dates (`createdAt`, or `date` for older r
 
 Date labels are never converted through UTC or moved into another day after a timezone change. Calendar adjacency remains correct through leap years and 23/25-hour daylight-saving days. Existing future confirmations survive clock rollback but are excluded from current statistics until their date is reached again. A long absence is processed as gaps without writing a row for every missed day.
 
-The first saved tracking history upgrades the complete-data format to **version 3**. It remains in the existing local-storage key and is included in the embedded data of a full PDF backup. Versions 1 and 2 remain importable. New days are unioned when importing records; **Restore everything** deliberately replaces the history with the selected backup. Older application tabs that do not understand version 3 refuse to overwrite it and must be refreshed. Ordinary expense reports remain ordinary reports and do not contain a restorable tracking history.
+Tracking history uses complete-data **format 3 or newer**; it was introduced in version 3. It remains in the existing local-storage key and is included in full PDF and JSON backups. Versions 1 and 2 remain importable. New days are unioned when importing records; **Restore everything** deliberately replaces the history with the selected backup. Older application tabs that do not understand the saved format refuse to overwrite it and must be refreshed. Ordinary expense reports remain ordinary reports and do not contain a restorable tracking history.
+
+Profiles with manually saved exchange rates use **format 4** and keep the same tracking history. Full PDF and JSON backups include it; formats 1–3 remain importable. Rates never affect fictional berries.
 
 A changed editor opened before another tab resets or replaces the history is rejected instead of bringing removed days back. Read-only refreshes and concurrent additions remain safe; a real expense may still upgrade `NO_SPEND` to `LOGGED`.
 
@@ -50,23 +52,23 @@ A changed editor opened before another tab resets or replaces the history is rej
 
 | File | Responsibility |
 | --- | --- |
-| `src/lib/streakTypes.ts` | Persisted contract, validation and concurrent date union. |
-| `src/lib/streakLedger.ts` | Reconciliation, confirmation, automatic freezes, replay and recent-day views. |
-| `src/lib/useStreakStats.ts` | Shared local-day clock and cache keyed by immutable transactions and ledger. |
-| `src/lib/streakCopy.ts` | English and Russian strings for this feature. |
+| `src/lib/streak/streakTypes.ts` | Persisted contract, validation and concurrent date union. |
+| `src/lib/streak/streakLedger.ts` | Reconciliation, confirmation, automatic freezes, replay and recent-day views. |
+| `src/hooks/useStreakStats.ts` | Shared local-day clock and cache keyed by immutable transactions and ledger. |
+| `src/lib/streak/streakCopy.ts` | English and Russian strings for this feature. |
 | `src/components/StreakDays.tsx` | Accessible recent-day selection and confirmation. |
 | `src/components/StreakBounty.tsx` | Daily action, inventory, progress and WANTED presentation. |
 | `src/components/StreakBadge.tsx`, `src/components/ActivityCalendar.tsx` | Shared tracking statistics in navigation and profile. |
 | `src/components/StreakDays.css`, `src/components/StreakBounty.css` | Responsive controls, theme tokens and reduced-motion support. |
-| `src/App.tsx` | Atomic persistence with expenses, confirmations, import and transient feedback. |
-| `src/lib/finance.ts`, `src/lib/storage.ts` | Version 3 validation, preservation and merging. |
+| `src/App.tsx`, `src/hooks/useDataTransfer.ts` | Atomic persistence, confirmations, import and transient feedback. |
+| `src/lib/finance.ts`, `src/lib/storage/storage.ts` | Tracking validation, preservation and merging, including format 4 profiles. |
 | `src/pages/OverviewPage.tsx`, `src/pages/ProfilePage.tsx`, `src/lib/i18n.tsx`, `index.html` | View integration, localization and saved-theme bootstrap. |
-| `src/lib/*.test.ts`, `tests/streak-browser.mjs`, `tests/run-browser.mjs`, `tests/design-browser.mjs` | Domain, storage, PDF, migration, production UI and regression checks. |
+| `src/lib/streak/*.test.ts`, `src/hooks/useStreakStats.test.ts`, `tests/streak-browser.mjs`, `tests/run-browser.mjs`, `tests/design-browser.mjs` | Domain, storage, PDF, migration, production UI and regression checks. |
 
 Run all unit tests with `npm test`. Focused domain checks:
 
 ```bash
-npm test -- src/lib/streakLedger.test.ts src/lib/streak.test.ts src/lib/useStreakStats.test.ts
+npm test -- src/lib/streak/streakLedger.test.ts src/lib/streak/streak.test.ts src/hooks/useStreakStats.test.ts
 ```
 
 Run the production browser checks with:
@@ -77,7 +79,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Release 2.7.0 passed **428 unit tests and 151 production browser scenarios**, including 18 tracking-specific browser scenarios. Both the ordinary build and the GitHub Pages build passed. An additional eight mobile checks covered Russian/English, light/dark themes and protected/restarted runs, with no accessibility violations, JavaScript errors or horizontal page overflow; all new buttons measured at least 44 × 44 pixels.
+Historical verification: release 2.7.0 passed **428 unit tests and 151 production browser scenarios**, including 18 tracking-specific browser scenarios. Both the ordinary build and the GitHub Pages build passed. An additional eight mobile checks covered Russian/English, light/dark themes and protected/restarted runs, with no accessibility violations, JavaScript errors or horizontal page overflow; all new buttons measured at least 44 × 44 pixels.
 
 These unit cases include recording/no-spend days, protected and unprotected gaps, two missed days with one freeze, inventory rewards/cap, backfill from frozen/missed, expiry, replay and confirmation idempotency, legacy migration, concurrent merges, midnight, timezone changes and daylight-saving boundaries. Runtime data remains local to each browser; device clocks and dates are trusted, and this feature does not add account synchronization or server-side clock verification.
 
@@ -127,7 +129,9 @@ The supplied prompt starts midway through its specification. The confirmed seven
 
 Местные даты не переводятся через UTC и не переносятся на другой день после смены часового пояса. Соседство дней корректно определяется в високосные годы и при 23/25-часовых сутках. Уже сохранённые будущие подтверждения переживают перевод часов назад, но не входят в текущую статистику до повторного наступления своей даты. Долгое отсутствие обрабатывается промежутками, без сохранения отдельной строки на каждый пропущенный день.
 
-Первое сохранение истории учёта переводит формат полных данных в **версию 3**. Ключ локального хранилища сохраняется; история входит во вложенные данные полной PDF-копии. Версии 1 и 2 продолжают импортироваться. При добавлении записей новые подтверждённые дни объединяются; **«Восстановить всё»** намеренно заменяет историю выбранной копией. Старые вкладки, которые не понимают версию 3, отказываются её перезаписывать — их нужно обновить. Обычный отчёт по расходам остаётся отчётом и не содержит восстанавливаемой истории учёта.
+История учёта использует **формат 3 или новее**; она появилась в версии 3. Ключ локального хранилища сохраняется; история входит в полные PDF- и JSON-копии. Версии 1 и 2 продолжают импортироваться. При добавлении записей новые подтверждённые дни объединяются; **«Восстановить всё»** намеренно заменяет историю выбранной копией. Старые вкладки, которые не понимают сохранённый формат, отказываются его перезаписывать — их нужно обновить. Обычный отчёт по расходам остаётся отчётом и не содержит восстанавливаемой истории учёта.
+
+Профили с сохранёнными вручную курсами используют **формат 4** и ту же историю учёта. Полные PDF- и JSON-копии включают её; форматы 1–3 продолжают импортироваться. Курсы не влияют на игровые берри.
 
 Изменённый редактор, открытый до сброса или замены истории в другой вкладке, получает отказ вместо возвращения удалённых дней. Обновление без изменений и одновременное добавление дней безопасны; реальный расход по-прежнему может заменить `NO_SPEND` на `LOGGED`.
 
@@ -135,23 +139,23 @@ The supplied prompt starts midway through its specification. The confirmed seven
 
 | Файл | Назначение |
 | --- | --- |
-| `src/lib/streakTypes.ts` | Формат истории, валидация и объединение дат между вкладками. |
-| `src/lib/streakLedger.ts` | Подтверждения, автоматические заморозки, пересчёт и последние дни. |
-| `src/lib/useStreakStats.ts` | Общие часы местного дня и кеш по неизменяемым расходам и истории. |
-| `src/lib/streakCopy.ts` | Английские и русские строки функции. |
+| `src/lib/streak/streakTypes.ts` | Формат истории, валидация и объединение дат между вкладками. |
+| `src/lib/streak/streakLedger.ts` | Подтверждения, автоматические заморозки, пересчёт и последние дни. |
+| `src/hooks/useStreakStats.ts` | Общие часы местного дня и кеш по неизменяемым расходам и истории. |
+| `src/lib/streak/streakCopy.ts` | Английские и русские строки функции. |
 | `src/components/StreakDays.tsx` | Доступный выбор и подтверждение недавнего дня. |
 | `src/components/StreakBounty.tsx` | Ежедневное действие, запас, прогресс и постер WANTED. |
 | `src/components/StreakBadge.tsx`, `src/components/ActivityCalendar.tsx` | Общая статистика учёта в навигации и профиле. |
 | `src/components/StreakDays.css`, `src/components/StreakBounty.css` | Адаптивные кнопки, переменные темы и поддержка уменьшенного движения. |
-| `src/App.tsx` | Атомарное сохранение с расходами, подтверждения, импорт и обратная связь. |
-| `src/lib/finance.ts`, `src/lib/storage.ts` | Валидация, сохранение и объединение формата 3. |
+| `src/App.tsx`, `src/hooks/useDataTransfer.ts` | Атомарное сохранение, подтверждения, импорт и обратная связь. |
+| `src/lib/finance.ts`, `src/lib/storage/storage.ts` | Валидация, сохранение и объединение истории, включая профили формата 4. |
 | `src/pages/OverviewPage.tsx`, `src/pages/ProfilePage.tsx`, `src/lib/i18n.tsx`, `index.html` | Подключение страниц, локализация и раннее применение сохранённой темы. |
-| `src/lib/*.test.ts`, `tests/streak-browser.mjs`, `tests/run-browser.mjs`, `tests/design-browser.mjs` | Проверки движка, хранилища, PDF, миграции, интерфейса сборки и регрессий. |
+| `src/lib/streak/*.test.ts`, `src/hooks/useStreakStats.test.ts`, `tests/streak-browser.mjs`, `tests/run-browser.mjs`, `tests/design-browser.mjs` | Проверки движка, хранилища, PDF, миграции, интерфейса сборки и регрессий. |
 
 Все модульные проверки: `npm test`. Проверки движка отдельно:
 
 ```bash
-npm test -- src/lib/streakLedger.test.ts src/lib/streak.test.ts src/lib/useStreakStats.test.ts
+npm test -- src/lib/streak/streakLedger.test.ts src/lib/streak/streak.test.ts src/hooks/useStreakStats.test.ts
 ```
 
 Браузерные проверки производственной сборки:
@@ -162,7 +166,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Версия 2.7.0 прошла **428 модульных тестов и 151 браузерный сценарий производственной сборки**, включая 18 сценариев новой механики учёта. Обычная сборка и сборка для GitHub Pages завершились успешно. Дополнительно проверены восемь мобильных сочетаний языка RU/EN, светлой/тёмной темы и сохранённой/прерванной серии: нарушений доступности, ошибок JavaScript и горизонтального переполнения страницы не найдено; все новые кнопки имеют размер не меньше 44 × 44 пикселей.
+Историческая проверка релиза 2.7.0: пройдены **428 модульных тестов и 151 браузерный сценарий производственной сборки**, включая 18 сценариев новой механики учёта. Обычная сборка и сборка для GitHub Pages завершились успешно. Дополнительно проверены восемь мобильных сочетаний языка RU/EN, светлой/тёмной темы и сохранённой/прерванной серии: нарушений доступности, ошибок JavaScript и горизонтального переполнения страницы не найдено; все новые кнопки имеют размер не меньше 44 × 44 пикселей.
 
 Модульные сценарии включают запись и день без трат, пропуски с защитой и без неё, два пропуска при одной заморозке, выдачу и потолок запаса, подтверждение замороженного и пропущенного дня, срок подтверждения, идемпотентность, миграцию, объединение вкладок, полночь, смену часового пояса и перевод часов. Данные остаются локальными в браузере; приложение доверяет часам устройства и не добавляет синхронизацию аккаунта или серверную проверку времени.
 

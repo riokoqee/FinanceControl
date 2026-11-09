@@ -15,8 +15,8 @@ import {
 import type { Language, Transaction } from "../lib/finance";
 import { translate } from "../lib/i18n";
 import { plural } from "../lib/display";
-import { useLocalCalendarDay, useStreakStats } from "../lib/useStreakStats";
-import type { StreakLedger } from "../lib/streakTypes";
+import { useLocalCalendarDay, useStreakStats } from "../hooks/useStreakStats";
+import type { StreakLedger } from "../lib/streak/streakTypes";
 
 const russianPlural = new Intl.PluralRules("ru");
 

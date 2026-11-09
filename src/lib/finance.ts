@@ -1,6 +1,10 @@
-import { isStreakLedger } from './streakTypes';
-import type { StreakLedger } from './streakTypes';
-import { streakCopy } from './streakCopy';
+import { isStreakLedger } from './streak/streakTypes';
+import type { StreakLedger } from './streak/streakTypes';
+import { streakCopy } from './streak/streakCopy';
+import { currencyCopy, isExchangeRates, REFERENCE_RATES } from './currency';
+import type { ExchangeRates } from './currency';
+export type { ExchangeRates } from './currency';
+export { REFERENCE_RATES } from './currency';
 
 export type Currency = 'USD' | 'EUR' | 'KZT';
 export type Language = 'ru' | 'en';
@@ -71,11 +75,13 @@ export interface Profile {
   language: Language;
   /** A resized raster image saved with the profile, never a remote URL or SVG. */
   avatar?: string;
+  /** Optional manual units per USD; original transaction amounts stay untouched. */
+  exchangeRates?: ExchangeRates;
 }
 
 export interface AppData {
   /** New feature versions stop older open tabs from discarding optional records. */
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   profile: Profile;
   transactions: Transaction[];
   /** Optional so existing version-one backups retain their original shape. */
@@ -113,13 +119,6 @@ export const CATEGORIES: ReadonlyArray<{
   { id: 'other', label: 'Другое', color: '#a6a6ae', icon: 'Ellipsis' },
 ];
 
-/** Illustrative fixed conversion rates, expressed as units per one US dollar. */
-export const REFERENCE_RATES: Readonly<Record<Currency, number>> = {
-  USD: 1,
-  EUR: 0.92,
-  KZT: 480,
-};
-export const RATE_LABEL = 'Условный курс: 1 USD = 0,92 EUR = 480 KZT';
 
 export const DEFAULT_PROFILE: Readonly<Profile> = {
   name: 'Пользователь',
@@ -172,18 +171,21 @@ export function getMonthTransactions(transactions: Transaction[], month: string)
   return transactions.filter((transaction) => transaction.date.startsWith(`${month}-`));
 }
 
-export function convertAmount(amount: number, from: Currency, to: Currency): number {
+export function convertAmount(
+  amount: number, from: Currency, to: Currency, rates: Readonly<ExchangeRates> = REFERENCE_RATES,
+): number {
   if (from === to) return amount;
-  return (amount / REFERENCE_RATES[from]) * REFERENCE_RATES[to];
+  return (amount / rates[from]) * rates[to];
 }
 
 export function getMonthTotal(
   transactions: Transaction[],
   month: string,
   currency: Currency,
+  rates: Readonly<ExchangeRates> = REFERENCE_RATES,
 ): number {
   return getMonthTransactions(transactions, month).reduce(
-    (total, transaction) => total + convertAmount(transaction.amount, transaction.currency, currency),
+    (total, transaction) => total + convertAmount(transaction.amount, transaction.currency, currency, rates),
     0,
   );
 }
@@ -301,8 +303,9 @@ export function validateBackup(input: unknown): AppData {
     }
   }
 
-  if (!isRecord(data) || ![1, 2, 3].includes(data.version as number) || !isRecord(data.profile) ||
-    (data.version === 3 && !Object.prototype.hasOwnProperty.call(data, 'streak'))) {
+  if (!isRecord(data) || ![1, 2, 3, 4].includes(data.version as number) || !isRecord(data.profile) ||
+    (data.version === 3 && !Object.prototype.hasOwnProperty.call(data, 'streak')) ||
+    (data.version === 4 && !Object.prototype.hasOwnProperty.call(data.profile, 'exchangeRates'))) {
     throw new Error('Неподдерживаемый формат резервной копии.');
   }
   const profile = data.profile;
@@ -314,6 +317,15 @@ export function validateBackup(input: unknown): AppData {
     (profile.avatar !== undefined && !validAvatar(profile.avatar))
   ) {
     throw new Error('Настройки профиля в резервной копии некорректны.');
+  }
+  let exchangeRates: ExchangeRates | undefined;
+  if (Object.prototype.hasOwnProperty.call(profile, 'exchangeRates')) {
+    if (!isExchangeRates(profile.exchangeRates)) throw new Error(currencyCopy.ru.invalidRates);
+    exchangeRates = {
+      USD: 1,
+      EUR: profile.exchangeRates.EUR,
+      KZT: profile.exchangeRates.KZT,
+    };
   }
   if (!Array.isArray(data.transactions) || data.transactions.length > MAX_TRANSACTIONS) {
     throw new Error('Некорректный список расходов в резервной копии.');
@@ -466,7 +478,7 @@ export function validateBackup(input: unknown): AppData {
   }
 
   return {
-    version: streak !== undefined ? 3 : data.version === 2 || categoryBudgets !== undefined || shoppingTemplates !== undefined ? 2 : 1,
+    version: exchangeRates !== undefined ? 4 : streak !== undefined ? 3 : data.version === 2 || categoryBudgets !== undefined || shoppingTemplates !== undefined ? 2 : 1,
     profile: {
       name: readText(profile.name, 'Имя', 80),
       email: readText(profile.email, 'Электронная почта', 254, true),
@@ -475,6 +487,7 @@ export function validateBackup(input: unknown): AppData {
       theme: profile.theme as Profile['theme'],
       language: (profile.language ?? 'ru') as Language,
       ...(profile.avatar !== undefined ? { avatar: profile.avatar as string } : {}),
+      ...(exchangeRates !== undefined ? { exchangeRates } : {}),
     },
     transactions,
     ...(shoppingList !== undefined ? { shoppingList } : {}),

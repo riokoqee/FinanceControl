@@ -6,15 +6,16 @@ import {
   CURRENCIES,
   convertAmount,
   formatMoney,
-  RATE_LABEL,
 } from "../lib/finance";
-import type { Currency, Language, Transaction } from "../lib/finance";
+import type { Currency, ExchangeRates, Language, Transaction } from "../lib/finance";
+import { currencyCopy, getRateLabel } from "../lib/currency";
 import { translate } from "../lib/i18n";
 import TransactionTable from "../components/TransactionTable";
 interface TrackerPageProps {
   filtered: Transaction[];
   language: Language;
   currency: Currency;
+  rates?: ExchangeRates;
   search: string;
   category: string;
   filterCurrency: string;
@@ -34,12 +35,14 @@ interface TrackerPageProps {
   onEdit: (record: Transaction) => void;
   onDelete: (record: Transaction) => void;
   onExport: () => void;
+  onExportCsv: () => void;
   onProfile: () => void;
 }
 export default function TrackerPage({
   filtered,
   language,
   currency,
+  rates,
   search,
   category,
   filterCurrency,
@@ -59,6 +62,7 @@ export default function TrackerPage({
   onEdit,
   onDelete,
   onExport,
+  onExportCsv,
   onProfile,
 }: TrackerPageProps) {
   const tr = (text: string) => translate(language, text);
@@ -66,10 +70,10 @@ export default function TrackerPage({
     () =>
       filtered.reduce(
         (sum, record) =>
-          sum + convertAmount(record.amount, record.currency, currency),
+          sum + convertAmount(record.amount, record.currency, currency, rates),
         0,
       ),
-    [filtered, currency],
+    [filtered, currency, rates],
   );
   return (
     <>
@@ -175,6 +179,7 @@ export default function TrackerPage({
               </span>
             </>
           )}
+          <button className="inline-link" onClick={onExportCsv}><Download size={14} />CSV</button>
           <button className="inline-link" onClick={onExport} disabled={pdfBusy}>
             <Download size={14} />
             {tr("Создать PDF")}
@@ -184,11 +189,11 @@ export default function TrackerPage({
       <p className="workspace-footnote">
         <button
           className="inline-link"
-          title={tr(RATE_LABEL)}
+          title={getRateLabel(rates, language)}
           onClick={onProfile}
         >
           <CircleHelp size={13} />
-          {tr("Условный курс")}
+          {currencyCopy[language][rates ? "manual" : "estimate"]}
         </button>
       </p>
     </>

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
-const url = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/FinanceControl/';
+const url = process.env.BELILOG_URL ?? 'http://127.0.0.1:5175/belilog/';
 const KEY = 'finance-control:data:v1';
 const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin' }).format(new Date());
 const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'],

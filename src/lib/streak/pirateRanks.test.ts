@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Transaction } from "./finance";
-import { todayString } from "./finance";
+import type { Transaction } from "../finance";
+import { todayString } from "../finance";
 import { getPirateProgress, getStreakIncrease, PIRATE_RANKS } from "./pirateRanks";
 import { BERRIES_PER_DAY, getStreakStats } from "./streak";
 import type { StreakStats } from "./streak";

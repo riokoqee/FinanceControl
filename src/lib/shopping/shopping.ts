@@ -8,7 +8,7 @@ import {
   type AppData,
   type Currency,
   type ShoppingItem,
-} from './finance';
+} from '../finance';
 
 const MAX_SHOPPING_ITEMS = 1_000;
 

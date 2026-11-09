@@ -10,7 +10,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { CATEGORIES, formatMoney, RATE_LABEL } from "../lib/finance";
+import { CATEGORIES, formatMoney } from "../lib/finance";
 import type {
   AppData,
   CategoryBudget,
@@ -19,10 +19,11 @@ import type {
   Language,
   Transaction,
 } from "../lib/finance";
+import { currencyCopy, getRateLabel } from "../lib/currency";
 import type { summarizeExpenses } from "../lib/expenses";
 import { plural } from "../lib/display";
 import { translate } from "../lib/i18n";
-import { useLocalCalendarDay } from "../lib/useStreakStats";
+import { useLocalCalendarDay } from "../hooks/useStreakStats";
 import { summarizeCategoryBudgets } from "../lib/budgets";
 import StreakBounty from "../components/StreakBounty";
 import type { BountyCelebration } from "../components/StreakBounty";
@@ -117,8 +118,8 @@ export default function OverviewPage({
   } = summary;
   const categoryBudgets = data.categoryBudgets ?? NO_CATEGORY_BUDGETS;
   const budgetProgress = useMemo(
-    () => summarizeCategoryBudgets(transactions, categoryBudgets, month),
-    [transactions, categoryBudgets, month],
+    () => summarizeCategoryBudgets(transactions, categoryBudgets, month, data.profile.exchangeRates),
+    [transactions, categoryBudgets, month, data.profile.exchangeRates],
   );
   const unbudgetedCategories = useMemo(() => {
     const configured = new Set(categoryBudgets.map((item) => item.id));
@@ -158,17 +159,6 @@ export default function OverviewPage({
           </div>
         </section>
       )}
-      <StreakBounty
-        transactions={data.transactions}
-        ledger={data.streak}
-        profile={data.profile}
-        language={language}
-        variant="overview"
-        celebration={celebration}
-        onAddExpense={onAddExpense}
-        onNoSpend={onNoSpend}
-        onConfirmDay={onConfirmDay}
-      />
       {showDemoBanner && data.transactions.length === 0 && (
         <div className="demo-banner">
           <span className="demo-icon">
@@ -186,6 +176,18 @@ export default function OverviewPage({
           </button>
         </div>
       )}
+      <StreakBounty
+        transactions={data.transactions}
+        ledger={data.streak}
+        profile={data.profile}
+        language={language}
+        variant="overview"
+        celebration={celebration}
+        onAddExpense={onAddExpense}
+        onNoSpend={onNoSpend}
+        onConfirmDay={onConfirmDay}
+      />
+
       <div className="overview-stats">
         <div className="stat-card stat-card-featured">
           <div className="stat-label">
@@ -310,6 +312,7 @@ export default function OverviewPage({
             month={month}
             range={chartRange}
             currency={currency}
+            rates={data.profile.exchangeRates}
           />
           {chartRange === "week" && (
             <div className="chart-legend">
@@ -528,11 +531,11 @@ export default function OverviewPage({
         <button
           type="button"
           className="inline-link"
-          title={tr(RATE_LABEL)}
+          title={getRateLabel(data.profile.exchangeRates, language)}
           onClick={onProfile}
         >
           <CircleHelp size={13} />
-          {tr("Условный курс")}
+          {currencyCopy[language][data.profile.exchangeRates ? "manual" : "estimate"]}
         </button>
       </p>
     </>

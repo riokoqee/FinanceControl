@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Transaction } from "./finance";
+import type { Transaction } from "../lib/finance";
 import { getCachedStreakStats } from "./useStreakStats";
-import { confirmNoSpend, reconcileStreak } from "./streakLedger";
+import { confirmNoSpend, reconcileStreak } from "../lib/streak/streakLedger";
 
 const transaction: Transaction = {
   id: "expense", title: "Bread", amount: 2, currency: "EUR", category: "food",

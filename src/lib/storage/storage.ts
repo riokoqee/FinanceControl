@@ -7,11 +7,11 @@ import {
   type CategoryBudget,
   type Profile,
   type Transaction,
-} from './finance';
-import { isStreakLedger, mergeStreakLedgers } from './streakTypes';
-import { streakCopy } from './streakCopy';
+} from '../finance';
+import { isStreakLedger, mergeStreakLedgers } from '../streak/streakTypes';
+import { streakCopy } from '../streak/streakCopy';
 
-export { parseMoney } from './finance';
+export { parseMoney } from '../finance';
 
 export const LAST_GOOD_KEY = `${STORAGE_KEY}:last-good`;
 export const CORRUPT_KEY = `${STORAGE_KEY}:recovery`;
@@ -300,7 +300,7 @@ function retainConfirmedDays(previous: AppData, candidate: AppData): AppData {
   if (previous.streak === undefined) return candidate;
   const streak = mergeStreakLedgers(previous.streak, candidate.streak);
   if (!isStreakLedger(streak)) throw new Error(streakCopy.ru.invalidHistory);
-  return { ...candidate, version: 3, streak };
+  return { ...candidate, version: candidate.profile.exchangeRates ? 4 : 3, streak };
 }
 
 /**

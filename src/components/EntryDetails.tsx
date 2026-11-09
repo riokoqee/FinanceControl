@@ -13,7 +13,7 @@ import {
 import { CATEGORIES, formatMoney, getItemTotal } from "../lib/finance";
 import type { Language, Transaction, TransactionItem } from "../lib/finance";
 import { translate } from "../lib/i18n";
-import { parseMoney } from "../lib/storage";
+import { parseMoney } from "../lib/storage/storage";
 
 const EMPTY_ITEMS: TransactionItem[] = [];
 

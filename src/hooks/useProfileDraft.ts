@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Profile } from './finance';
+import type { Profile } from '../lib/finance';
 
-const fields: (keyof Profile)[] = ['name', 'email', 'currency', 'monthlyBudget', 'theme', 'language', 'avatar'];
-const same = (a: Profile, b: Profile) => fields.every((field) => a[field] === b[field]);
+const fields: (keyof Profile)[] = ['name', 'email', 'currency', 'monthlyBudget', 'theme', 'language', 'avatar', 'exchangeRates'];
+const equalField = (a: Profile, b: Profile, field: keyof Profile) => field === 'exchangeRates'
+  ? a.exchangeRates === b.exchangeRates || (!!a.exchangeRates && !!b.exchangeRates
+    && a.exchangeRates.EUR === b.exchangeRates.EUR && a.exchangeRates.KZT === b.exchangeRates.KZT)
+  : a[field] === b[field];
+const same = (a: Profile, b: Profile) => fields.every((field) => equalField(a, b, field));
 const valid = (profile: Profile, persisted: Profile) => Boolean(profile.name.trim()) && Number.isFinite(profile.monthlyBudget) &&
   profile.monthlyBudget >= 0 && profile.monthlyBudget <= 1e12 &&
   (profile.monthlyBudget === persisted.monthlyBudget || Math.round(profile.monthlyBudget * 100) / 100 === profile.monthlyBudget) &&
@@ -47,7 +51,7 @@ export function useProfileDraft(
     // Retain the user's raw spacing while reconciling fields changed in another tab.
     const next = { ...saved };
     for (const field of fields) {
-      if (current.profile[field] !== previous[field] && saved[field] === normalized[field]) {
+      if (!equalField(current.profile, previous, field) && equalField(saved, normalized, field)) {
         Object.assign(next, { [field]: current.profile[field] });
       }
     }
@@ -67,7 +71,7 @@ export function useProfileDraft(
     const previous = base.current;
     const selected = new Set(fields.filter((field) => Object.prototype.hasOwnProperty.call(patch, field)));
     // Clicking the selected theme must not cancel an unrelated pending autosave.
-    if ([...selected].every((field) => patch[field] === current.persisted[field] && current.profile[field] === current.persisted[field])) {
+    if ([...selected].every((field) => equalField({ ...current.persisted, ...patch }, current.persisted, field) && equalField(current.profile, current.persisted, field))) {
       return current.persisted;
     }
     cancel();
@@ -80,7 +84,7 @@ export function useProfileDraft(
     const next = { ...saved };
     const nextBase = { ...saved };
     for (const field of fields) {
-      if (!selected.has(field) && current.profile[field] !== previous[field] && current.profile[field] !== saved[field]) {
+      if (!selected.has(field) && !equalField(current.profile, previous, field) && !equalField(current.profile, saved, field)) {
         Object.assign(next, { [field]: current.profile[field] });
         Object.assign(nextBase, { [field]: previous[field] });
       }
@@ -100,7 +104,7 @@ export function useProfileDraft(
     const next = { ...persisted };
     const nextBase = { ...persisted };
     for (const field of fields) {
-      if (draft[field] !== previous[field] && draft[field] !== persisted[field]) {
+      if (!equalField(draft, previous, field) && !equalField(draft, persisted, field)) {
         Object.assign(next, { [field]: draft[field] });
         Object.assign(nextBase, { [field]: previous[field] });
       }
@@ -115,7 +119,7 @@ export function useProfileDraft(
     const normalized = { ...current.profile, name: current.profile.name.trim(), email: current.profile.email.trim() };
     if (same(normalized, current.persisted)) return;
     const immediate = current.profile.theme !== base.current.theme || current.profile.currency !== base.current.currency ||
-      current.profile.language !== base.current.language || current.profile.avatar !== base.current.avatar;
+      current.profile.language !== base.current.language || current.profile.avatar !== base.current.avatar || !equalField(current.profile, base.current, 'exchangeRates');
     if (immediate) flushProfile();
     else timer.current = setTimeout(flushProfile, 350);
     return cancel;
