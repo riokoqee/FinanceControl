@@ -109,7 +109,7 @@
 .shopping-templates-button { gap: 8px; min-height: 44px; margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 12px; }
 .shopping-templates-button:hover { border-color: var(--control-border); background: var(--surface-hover); color: var(--text); }
 .shopping-filters { gap: 8px; padding: 16px 24px 12px; }
-.shopping-filter { min-height: 44px; padding: 8px 16px; border-radius: var(--radius-sm); font-size: 12px; }
+.shopping-filter { min-width: 44px; min-height: 44px; padding: 8px 16px; border-radius: var(--radius-sm); font-size: 12px; }
 .shopping-filter:hover { background: var(--surface-hover); }
 .shopping-filter[aria-pressed='true'] { border-color: var(--control-border); background: var(--surface-raised); color: var(--text); }
 .shopping-items { padding-inline: 24px; }

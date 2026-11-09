@@ -359,4 +359,21 @@ Aliases can remain temporarily for compatibility across incremental area commits
 
 ## Verification ledger
 
-Baseline test/build results and screenshot evidence are recorded by the root task after the required Step 0 commands. This read-only audit does not claim those commands passed. After migration, re-run the same search, inspect any remaining art exceptions, and run the full existing suite plus expanded token contrast checks.
+Step 0 was completed before styling edits: `npm install` passed with 0 vulnerabilities; `npm test` passed **356 tests**; normal and `GITHUB_PAGES=true` builds passed; bundled Playwright Chromium installation passed; `npm run test:browser` passed **105 scenarios**. The root task captured **48 before screenshots** across the required pages/components, themes and viewports. Evidence is indexed in `docs/DESIGN_REDESIGN.md`.
+
+### Step 2 implementation review
+
+All palette literals, including the optional WANTED artwork exceptions, were centralized in the `src/styles.css` semantic palette block. **No raw hex/rgb/hsl colors remain outside that block; no exceptions are used.** CSS keeps its previous dimensions, selectors and interaction handlers during this token-only step. The per-area design passes follow separately.
+
+The final implementation uses `--chart-food`, `--chart-transport`, `--chart-home`, `--chart-entertainment`, `--chart-health`, `--chart-shopping` and `--chart-other`; the `home` suffix matches the existing data category ID. `--control-border` identifies interactive edges, and `--border` remains the prescribed decorative separator. Existing aliases continue to refer to semantic values for incremental compatibility.
+
+| Contrast-driven refinement | Dark | Light | Evidence |
+| --- | --- | --- | --- |
+| `--control-border` | `#5D7790` | `#8A7958` | ≥3.13:1 / ≥3.54:1 against the darkest/lightest applicable normal surfaces |
+| `--chart-food` | Prescribed `#D7B777` | `#A48032` | Light: 3.41:1 surface, 3.61:1 raised, 3.07:1 canvas; prescribed light `#B8923F` was only 2.70:1 on surface |
+
+The remaining required base colors stay exact. Supplemental fills use `color-mix()` and role-based source tokens; poster pigments retain their independent parchment/art roles. Theme-color metadata reads computed `--bg` after the existing theme resolution. No persisted theme values, keys, data formats, PDF output or protected business modules changed.
+
+Read-only verification after token migration: all custom-property references resolve; no direct self references or transitive dependency cycles remain; central tokens do not reference variables defined only on descendants; no protected `src/lib` files changed. Two migration review findings were corrected by the root task before committing: the universal border-box rule was restored, and the poster's soft frame token now references the explicit rookie frame tint.
+
+Per-area and final contrast/browser results are recorded in `docs/DESIGN_REDESIGN.md`; this section records only completed baseline and token-audit evidence.

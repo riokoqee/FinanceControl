@@ -135,7 +135,19 @@ src/styles.css                    палитра, темы и адаптивна
 tests/                            браузерные регрессии и проверки контраста
 ```
 
-Интерфейс использует локальный вариативный Manrope: нужные языковые поднаборы выбирает браузер, отдельные файлы для каждой толщины не нужны. Для названия ベリログ используется небольшой локальный поднабор Noto Sans JP. PDF использует локальный DejaVu Sans; лицензия находится в `public/fonts/`. Изображения соломенной шляпы предоставлены в `assets/`; подготовленная PNG-иконка 512×512 используется в бренде, главном экране и постере без аватара, а ICO — в иконке браузера. Графики, карта и декоративные детали реализованы средствами SVG/CSS. Иконки интерфейса — Lucide. Учтена настройка уменьшенного движения.
+## Design / Дизайн
+
+The light and dark themes share semantic color tokens, a 4/8px spacing scale and 8/12/16px radii. Gold identifies primary actions, navigation, streaks and bounties; teal signals successful saves, amber warns about budgets, and coral marks errors or overspending. Category charts also use patterns and named amounts. Budget states have an icon and a short label, including a distinct “Limit reached” state at exactly 100%.
+
+Keyboard focus uses a 2px ring with a 2px offset. Mobile controls have 44px touch targets; the activity heatmap scrolls inside its own container. The saved or system theme is resolved before the first render. Theme color transitions last 180ms, and reduced-motion preferences disable animation and particles. WANTED retains its composition and fixed parchment, with rank-specific metal, seals and scorch treatment.
+
+Manrope Variable, the Noto Sans JP subset used for ベリログ, and DejaVu Sans for PDF remain local; font licenses are in `public/fonts/`. The straw-hat artwork comes from `assets/`; the prepared 512×512 PNG is used by the brand, overview and avatar-free poster, and the ICO by the browser. Charts and decorative details use SVG/CSS; interface icons use Lucide. No runtime dependencies or remote fonts were added. The redesign leaves stored data, calculations, PDF styling and lazy loading intact. See the [color audit](docs/DESIGN_COLOR_AUDIT.md) and [design and verification report](docs/DESIGN_REDESIGN.md).
+
+Светлая и тёмная темы используют общие смысловые цветовые переменные, шаг отступов 4/8px и радиусы 8/12/16px. Золото выделяет основные действия, навигацию, серии и награды; бирюзовый показывает успешное сохранение, янтарный предупреждает о лимите, коралловый обозначает ошибки и перерасход. Категории графика дополнительно различаются узорами и подписями сумм. Состояния бюджета сопровождаются значком и коротким текстом; ровно 100% отмечается как «Лимит использован».
+
+Фокус клавиатуры обозначен рамкой 2px с отступом 2px. Размер мобильных элементов управления — от 44px; календарь активности прокручивается внутри своего блока. Сохранённая или системная тема определяется до первого отображения. Переход цвета занимает 180мс, а настройка уменьшенного движения отключает анимации и частицы. Постер WANTED сохраняет композицию и пергамент; ранг меняет металлические акценты, печать и подпалины.
+
+Manrope Variable, поднабор Noto Sans JP для ベリログ и DejaVu Sans для PDF остаются локальными; лицензии находятся в `public/fonts/`. Соломенная шляпа взята из `assets/`: PNG 512×512 используется в бренде, на обзоре и в постере без аватара, ICO — в иконке браузера. Графики и декор выполнены в SVG/CSS, иконки интерфейса — Lucide. Новых зависимостей и внешних шрифтов нет. Дизайн не меняет сохранённые данные, расчёты, оформление PDF и загрузку модулей по запросу. Подробности — в [аудите цветов](docs/DESIGN_COLOR_AUDIT.md) и [отчёте о дизайне и проверках](docs/DESIGN_REDESIGN.md).
 
 ## Производительность
 

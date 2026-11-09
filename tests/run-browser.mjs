@@ -27,6 +27,7 @@ try {
   await run('tests/shopping-confirmation.mjs');
   await run('tests/performance-regressions.mjs');
   await run('tests/planning-browser.mjs');
+  await run('tests/design-browser.mjs');
 } catch (error) {
   console.error(error);
   process.exitCode = 1;
