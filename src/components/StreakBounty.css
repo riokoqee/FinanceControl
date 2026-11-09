@@ -251,3 +251,22 @@ html[data-theme='dark'] .toast--pirate > svg { color: var(--gold); }
   .streak-bounty, .streak-bounty *, .streak-bounty *::before, .streak-bounty *::after { animation: none !important; transition: none !important; }
   .bounty-poster-effects, .bounty-flame, .bounty-ember, .bounty-ash, .bounty-gold-spark { display: none !important; }
 }
+
+/* Tracking rewards attention to finances, including days without a purchase. */
+.streak-bounty-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; max-width: 400px; margin-bottom: 10px; }
+.streak-bounty-metrics > div + div { padding-left: 12px; }
+.streak-bounty-metrics > div > span { align-items: flex-start; line-height: 1.5; }
+.streak-bounty-metrics > div > span > svg { flex: 0 0 auto; margin-top: 2px; }
+.streak-freeze-hint { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; max-width: 400px; margin: 0 0 22px; color: var(--text-muted); font-size: 11px; line-height: 1.6; }
+.streak-freeze-hint > p { margin: 0; }
+.streak-freeze-hint > span { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.streak-no-spend { min-height: 44px; max-width: 100%; font-size: 12px; white-space: normal; }
+.streak-bounty-action-row:has(.streak-no-spend) { gap: 10px 12px; }
+
+@media (max-width: 700px) {
+  .streak-bounty-metrics { gap: 10px; }
+  .streak-bounty-metrics > div + div { padding-left: 10px; }
+  .streak-bounty-metrics strong { font-size: 13px; }
+  .streak-bounty-metrics strong > small { display: block; margin-top: 2px; }
+  .streak-bounty-metrics .streak-freezes strong > small { display: inline; }
+}

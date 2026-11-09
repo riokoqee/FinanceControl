@@ -1,8 +1,12 @@
 import { memo, useEffect, useState } from "react";
-import { ArrowUpRight, CheckCircle2, Crown, Flame, Plus, Skull, Star, Trophy } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Crown, Flame, Leaf, Plus, Skull, Snowflake, Star, Trophy } from "lucide-react";
 import type { Language, Profile, Transaction } from "../lib/finance";
 import { BERRIES_PER_DAY } from "../lib/streak";
 import { useStreakStats } from "../lib/useStreakStats";
+import { useLocalCalendarDay } from "../lib/useStreakStats";
+import type { StreakLedger } from "../lib/streakTypes";
+import { streakCopy, streakMessage } from "../lib/streakCopy";
+import StreakDays from "./StreakDays";
 import { dayLabel } from "./StreakBadge";
 export { useStreakStats } from "../lib/useStreakStats";
 export { default as StreakBadge } from "./StreakBadge";
@@ -20,53 +24,14 @@ interface StreakBountyProps {
   transactions: Transaction[];
   profile: Profile;
   language: Language;
+  ledger?: StreakLedger;
   variant?: "overview" | "profile";
   onAddExpense?: () => void;
+  onNoSpend?: (day: string) => void;
+  onConfirmDay?: (day: string) => void;
+  busy?: boolean;
   celebration?: BountyCelebration | null;
 }
-
-const copy = {
-  ru: {
-    emptyTitle: "Начните свою легенду",
-    emptyDescription: "Записывайте расходы каждый день.",
-    recorded: "Сегодня записано",
-    waiting: "Добавьте запись сегодня",
-    begin: "Начать серию",
-    continue: "Продолжить серию",
-    add: "Добавить запись",
-    best: "Лучшая серия",
-    daily: "За день",
-    berries: "берри",
-    nextToday: "После записи сегодня",
-    nextTomorrow: "После записи завтра",
-    reward: "Награда за голову",
-    portrait: "Аватар капитана",
-    noPoster: "Первая запись — постер WANTED",
-    progression: "Прогресс пиратского ранга",
-    promoted: "НОВЫЙ ПИРАТСКИЙ РАНГ",
-    legend: "Легенда морей достигнута",
-  },
-  en: {
-    emptyTitle: "Your legend starts here",
-    emptyDescription: "Log your expenses every day.",
-    recorded: "Logged today",
-    waiting: "Add a record today",
-    begin: "Start your streak",
-    continue: "Keep your streak",
-    add: "Add a record",
-    best: "Best streak",
-    daily: "Per day",
-    berries: "berries",
-    nextToday: "After today’s record",
-    nextTomorrow: "After tomorrow’s record",
-    reward: "Bounty on your head",
-    portrait: "Captain’s avatar",
-    noPoster: "First record, first WANTED poster",
-    progression: "Pirate rank progress",
-    promoted: "PIRATE RANK UNLOCKED",
-    legend: "Legend of the Seas achieved",
-  },
-};
 
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
@@ -123,36 +88,37 @@ export default memo(function StreakBounty({
   transactions,
   profile,
   language,
+  ledger,
   variant = "overview",
   onAddExpense,
+  onNoSpend,
+  onConfirmDay,
+  busy = false,
   celebration = null,
 }: StreakBountyProps) {
-  const stats = useStreakStats(transactions);
+  const stats = useStreakStats(transactions, ledger);
+  const today = useLocalCalendarDay();
   const progression = getPirateProgress(stats.current);
   const activeCelebration = celebration?.toDays === stats.current && stats.activeToday ? celebration : null;
-  const t = copy[language];
+  const t = streakCopy[language];
   const hasStreak = stats.current > 0;
+  const hasTodayPurchases = transactions.some((transaction) => transaction.date === today);
   const formatBerries = (amount: number) =>
     berryFormatters[language].format(amount);
-  const currentLabel =
-    language === "en"
-      ? `${dayLabel(stats.current, language)} in a row`
-      : `${dayLabel(stats.current, language)} подряд`;
+  const currentLabel = streakMessage(t.inRow, { days: dayLabel(stats.current, language) });
   const progressLabel = progression.nextRank
-    ? language === "en"
-      ? `${dayLabel(progression.daysRemaining, language)} until ${progression.nextRank.name[language]}`
-      : `Ещё ${dayLabel(progression.daysRemaining, language)} до «${progression.nextRank.name[language]}»`
+    ? streakMessage(t.rankRemaining, { days: dayLabel(progression.daysRemaining, language), rank: progression.nextRank.name[language] })
     : t.legend;
   const RankSeal = progression.rank?.id === "legend" ? Crown : progression.rank?.id === "supernova" ? Star : Skull;
 
   return (
     <section
       className={`streak-bounty streak-bounty--${variant} ${hasStreak ? "streak-bounty--active" : "streak-bounty--empty"}`}
-      aria-label={
-        language === "en" ? "Daily streak and bounty" : "Серия дней и награда"
-      }
+      aria-label={t.region}
       data-streak={stats.current}
       data-active-today={stats.activeToday}
+      data-today-status={stats.todayStatus}
+      data-freezes={stats.freezes}
       data-rank={progression.rank?.id ?? "none"}
     >
       <div className="streak-bounty-copy">
@@ -172,11 +138,11 @@ export default memo(function StreakBounty({
             className={`streak-bounty-status ${stats.activeToday ? "streak-bounty-status--done" : ""}`}
           >
             {stats.activeToday ? (
-              <CheckCircle2 size={15} aria-hidden="true" />
+              stats.todayStatus === "NO_SPEND" ? <Leaf size={15} aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />
             ) : (
               <Flame size={15} aria-hidden="true" />
             )}
-            <span>{stats.activeToday ? t.recorded : t.waiting}</span>
+            <span>{stats.todayStatus === "NO_SPEND" ? t.noSpendRecorded : stats.activeToday ? t.recorded : t.waiting}</span>
           </div>
         ) : (
           <div className="streak-bounty-first-day">
@@ -200,9 +166,17 @@ export default memo(function StreakBounty({
               +{formatBerries(BERRIES_PER_DAY)} <small>{t.berries}</small>
             </strong>
           </div>
+          <div className="streak-freezes" title={t.freezeRule}>
+            <span><Snowflake size={13} aria-hidden="true" />{t.freezes}</span>
+            <strong>{stats.freezes}<small> / 2</small></strong>
+          </div>
+        </div>
+        <div className="streak-freeze-hint">
+          <p>{t.freezeHint}</p>
+          <span role="img" aria-label={stats.freezes === 2 ? streakMessage(t.freezeCount, { count: stats.freezes }) : streakMessage(t.freezeProgress, { count: stats.freezeProgress })}>{stats.freezeProgress}/7</span>
         </div>
         {progression.rank && (
-          <div className="pirate-progress" aria-label={t.progression}>
+          <div className="pirate-progress" role="group" aria-label={t.progression}>
             <div className="pirate-progress-heading">
               <strong>{progression.rank.name[language]}</strong>
             </div>
@@ -237,6 +211,17 @@ export default memo(function StreakBounty({
               {hasStreak ? (stats.activeToday ? t.add : t.continue) : t.begin}
             </button>
           )}
+          {onNoSpend && !stats.activeToday && (
+            <button
+              type="button"
+              className="button button-secondary streak-no-spend"
+              onClick={() => onNoSpend(today)}
+              disabled={busy}
+            >
+              {hasTodayPurchases ? <CheckCircle2 size={15} aria-hidden="true" /> : <Leaf size={15} aria-hidden="true" />}
+              {hasTodayPurchases ? t.confirmTracking : t.noSpend}
+            </button>
+          )}
           {hasStreak && (
             <div className="streak-bounty-next">
               <span>{stats.activeToday ? t.nextTomorrow : t.nextToday}</span>
@@ -247,6 +232,7 @@ export default memo(function StreakBounty({
             </div>
           )}
         </div>
+        <StreakDays transactions={transactions} ledger={ledger} language={language} busy={busy} onConfirmDay={onConfirmDay} />
       </div>
 
       {hasStreak && (

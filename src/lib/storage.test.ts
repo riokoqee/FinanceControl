@@ -16,6 +16,7 @@ import {
   writeStoredData,
 } from './storage';
 import { applyShoppingTemplate, makeShoppingTemplate } from './templates';
+import type { StreakLedger } from './streakTypes';
 
 const expense = (patch: Partial<Transaction> = {}): Transaction => ({
   id: 'expense', title: 'Groceries', amount: 25, currency: 'EUR', category: 'food', date: '2026-11-03', ...patch,
@@ -32,6 +33,137 @@ function memoryStorage(initial: Record<string, string> = {}) {
     setItem: (key: string, value: string) => { writes.push([key, value]); values.set(key, value); },
   };
 }
+
+describe('persistent accounting-day confirmations', () => {
+  const ledger = (...confirmedDays: StreakLedger['confirmedDays']): StreakLedger => ({
+    version: 1, startedOn: '2026-11-01', confirmedDays,
+  });
+  const withDays = (...days: StreakLedger['confirmedDays']): AppData => ({
+    ...data(), version: 3, streak: ledger(...days),
+  });
+
+  it('saves and reloads accounting days without adding an expense', () => {
+    const base = createEmptyData();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const next = commitStoredData(base, { ...base, streak: ledger({ date: '2026-11-01', status: 'NO_SPEND' }) }, storage);
+    expect(next.version).toBe(3);
+    expect(next.transactions).toEqual([]);
+    expect(readStoredData(storage)).toEqual({ status: 'ready', data: next });
+    expect(JSON.parse(storage.values.get(LAST_GOOD_KEY)!)).toEqual(next);
+  });
+
+  it('unions independent days from two stale tabs instead of overwriting them', () => {
+    const base = withDays();
+    const remote = withDays({ date: '2026-11-01', status: 'NO_SPEND' });
+    const local = withDays({ date: '2026-11-02', status: 'LOGGED' });
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    const next = commitStoredData(base, local, storage);
+    expect(next.streak!.confirmedDays).toEqual([
+      { date: '2026-11-01', status: 'NO_SPEND' },
+      { date: '2026-11-02', status: 'LOGGED' },
+    ]);
+    expect(commitStoredData(base, local, storage).streak).toEqual(next.streak);
+  });
+
+  it('counts simultaneous confirmation once and gives a logged day priority', () => {
+    const base = withDays();
+    const noSpend = withDays({ date: '2026-11-01', status: 'NO_SPEND' });
+    const logged = withDays({ date: '2026-11-01', status: 'LOGGED' });
+    expect(mergeAppData(base, noSpend, logged).streak).toEqual(logged.streak);
+    expect(mergeAppData(base, logged, noSpend).streak).toEqual(logged.streak);
+    expect(mergeAppData(base, structuredClone(noSpend), noSpend).streak).toEqual(noSpend.streak);
+  });
+
+  it('retains daily facts when stale profile and expense edits have no ledger', () => {
+    const base = data();
+    const remote = { ...base, version: 3 as const, streak: ledger({ date: '2026-11-01', status: 'NO_SPEND' }) };
+    const desired = { ...base, profile: { ...base.profile, name: 'Captain' }, transactions: [expense({ amount: 30 })] };
+    const next = mergeAppData(base, remote, desired);
+    expect(next.profile.name).toBe('Captain');
+    expect(next.transactions[0].amount).toBe(30);
+    expect(next.streak).toEqual(remote.streak);
+    expect(next.version).toBe(3);
+  });
+
+  it('does not delete a confirmation during ordinary fast-path or fresh mutations', () => {
+    const base = withDays({ date: '2026-11-01', status: 'NO_SPEND' });
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const desired = { ...data(), profile: { ...base.profile, name: 'Captain' } };
+    const fast = commitStoredData(base, desired, storage);
+    expect(fast.streak).toEqual(base.streak);
+    const fresh = commitStoredMutation(fast, () => ({ ...data(), profile: { ...base.profile, name: 'Navigator' } }), storage);
+    expect(fresh.streak).toEqual(base.streak);
+    expect(fresh.profile.name).toBe('Navigator');
+  });
+
+  it('allows an explicit full reset to remove accounting-day history', () => {
+    const base = withDays({ date: '2026-11-01', status: 'NO_SPEND' });
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    expect(commitStoredData(base, createEmptyData(), storage, { replaceCorrupt: true })).toEqual(createEmptyData());
+    expect(readStoredData(storage).data).not.toHaveProperty('streak');
+  });
+
+  it('does not resurrect accounting days when a stale editor saves after another tab resets everything', () => {
+    const base = withDays({ date: '2026-11-01', status: 'NO_SPEND' });
+    const reset = createEmptyData();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(reset) });
+    const desired = { ...base, profile: { ...base.profile, name: 'Stale captain' } };
+    expect(() => commitStoredData(base, desired, storage)).toThrow(DataConflictError);
+    expect(storage.values.get(STORAGE_KEY)).toBe(JSON.stringify(reset));
+    expect(storage.writes).toEqual([]);
+  });
+
+  it('rejects stale edits after a full restore removes or downgrades previously confirmed facts', () => {
+    const base = withDays({ date: '2026-11-01', status: 'LOGGED' });
+    const desired = { ...base, profile: { ...base.profile, name: 'Stale captain' } };
+    for (const remote of [
+      withDays({ date: '2026-11-02', status: 'NO_SPEND' }),
+      withDays({ date: '2026-11-01', status: 'NO_SPEND' }),
+      { ...base, streak: { ...base.streak!, startedOn: '2026-11-02' } },
+    ]) {
+      expect(() => mergeAppData(base, remote, desired)).toThrow(DataConflictError);
+      // An unchanged local snapshot still accepts the replacement without a write.
+      expect(mergeAppData(base, remote, base)).toEqual(remote);
+      expect(mergeAppData(base, remote, structuredClone(base))).toEqual(remote);
+    }
+  });
+
+  it('allows monotonic daily upgrades and earlier protection dates during concurrent edits', () => {
+    const base = withDays({ date: '2026-11-01', status: 'NO_SPEND' });
+    const remote = withDays({ date: '2026-11-01', status: 'LOGGED' });
+    remote.streak!.startedOn = '2026-10-01';
+    const desired = { ...base, profile: { ...base.profile, name: 'Captain' } };
+    const merged = mergeAppData(base, remote, desired);
+    expect(merged.streak).toEqual(remote.streak);
+    expect(merged.profile.name).toBe('Captain');
+  });
+
+  it('reuses unchanged confirmations after an unrelated profile edit or storage event', () => {
+    const base = withDays({ date: '2026-11-01', status: 'NO_SPEND' });
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const next = commitStoredData(base, { ...base, profile: { ...base.profile, name: 'Captain' } }, storage);
+    expect(next.streak).toBe(base.streak);
+    expect(readStoredData(storage, next).data.streak).toBe(next.streak);
+  });
+
+  it('keeps future unsupported versions read-only even with a usable recovery copy', () => {
+    const raw = JSON.stringify({ ...withDays(), version: 4, newData: ['must survive'] });
+    const storage = memoryStorage({ [STORAGE_KEY]: raw, [LAST_GOOD_KEY]: JSON.stringify(data()) });
+    expect(readStoredData(storage).status).toBe('recovered');
+    expect(() => commitStoredMutation(data(), (current) => ({ ...current, streak: ledger() }), storage)).toThrow(StorageRecoveryError);
+    expect(storage.values.get(STORAGE_KEY)).toBe(raw);
+    expect(storage.writes).toEqual([]);
+  });
+
+  it('retains the persisted day and reports failure when a new confirmation exceeds quota', () => {
+    const base = withDays({ date: '2026-11-01', status: 'NO_SPEND' });
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const full = { getItem: storage.getItem, setItem: () => { throw new Error('QuotaExceededError'); } };
+    const desired = withDays(...base.streak!.confirmedDays, { date: '2026-11-02', status: 'NO_SPEND' });
+    expect(() => commitStoredData(base, desired, full)).toThrow('QuotaExceededError');
+    expect(readStoredData(storage).data).toEqual(base);
+  });
+});
 
 describe('mutations recomputed against the latest primary', () => {
   const template = (): ShoppingTemplate => ({ id: 'weekly', name: 'Weekly', items: [{ title: 'Milk', currency: 'EUR' }] });

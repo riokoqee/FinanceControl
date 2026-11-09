@@ -331,7 +331,12 @@ try {
       const caption = await page.locator('.budget-caption').innerText();
       assert.match(caption, /used|reached|использован|достигнут|исчерпан/i);
       assert.doesNotMatch(caption, /exceeded|over by|превышен|сверх/i);
-      assert.deepEqual(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), key), exact);
+      // Daily tracking deliberately migrates legacy data; all financial fields
+      // must remain byte-for-byte equivalent while the confirmed day is added.
+      assert.deepEqual(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), key), {
+        ...exact, version: 3,
+        streak: { version: 1, startedOn: today, confirmedDays: [{ date: today, status: 'LOGGED' }] },
+      });
       await noOverflow(page); await accessible(page, 'main');
     }, { data: exact });
   }

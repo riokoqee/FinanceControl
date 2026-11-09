@@ -47,6 +47,8 @@ interface ProfilePageProps {
   onDemo: () => void;
   onReset: () => void;
   onAddExpense: () => void;
+  onNoSpend: (day: string) => void;
+  onConfirmDay: (day: string) => void;
 }
 
 export default function ProfilePage({
@@ -72,6 +74,8 @@ export default function ProfilePage({
   onDemo,
   onReset,
   onAddExpense,
+  onNoSpend,
+  onConfirmDay,
 }: ProfilePageProps) {
   const tr = (text: string) => translate(language, text);
   const avatarRef = useRef<HTMLInputElement>(null);
@@ -398,13 +402,16 @@ export default function ProfilePage({
       </div>
       <StreakBounty
         transactions={data.transactions}
+        ledger={data.streak}
         profile={data.profile}
         language={language}
         variant="profile"
         celebration={celebration}
         onAddExpense={onAddExpense}
+        onNoSpend={onNoSpend}
+        onConfirmDay={onConfirmDay}
       />
-      <ActivityCalendar transactions={data.transactions} language={language} />
+      <ActivityCalendar transactions={data.transactions} ledger={data.streak} language={language} />
     </div>
   );
 }

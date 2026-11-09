@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction } from "./finance";
 import { getCachedStreakStats } from "./useStreakStats";
+import { confirmNoSpend, reconcileStreak } from "./streakLedger";
 
 const transaction: Transaction = {
   id: "expense", title: "Bread", amount: 2, currency: "EUR", category: "food",
@@ -29,5 +30,18 @@ describe("shared streak results", () => {
     expect(first).toMatchObject({ current: 1, activeToday: false });
     expect(updated).toMatchObject({ current: 2, activeToday: true });
     expect(getCachedStreakStats([], "2026-11-06").current).toBe(0);
+  });
+
+  it("refreshes every widget when a no-spend confirmation changes the ledger", () => {
+    const records = [transaction];
+    const now = new Date("2026-11-06T12:00:00");
+    const ledger = reconcileStreak(records, undefined, now);
+    const first = getCachedStreakStats(records, "2026-11-06", ledger);
+    const confirmed = confirmNoSpend(records, ledger, "2026-11-06", now);
+    const next = getCachedStreakStats(records, "2026-11-06", confirmed);
+    expect(next).not.toBe(first);
+    expect(first).toMatchObject({ current: 1, activeToday: false });
+    expect(next).toMatchObject({ current: 2, todayStatus: "NO_SPEND", bounty: 1_000_000 });
+    expect(getCachedStreakStats(records, "2026-11-06", confirmed)).toBe(next);
   });
 });

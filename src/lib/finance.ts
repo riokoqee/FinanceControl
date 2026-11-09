@@ -1,3 +1,7 @@
+import { isStreakLedger } from './streakTypes';
+import type { StreakLedger } from './streakTypes';
+import { streakCopy } from './streakCopy';
+
 export type Currency = 'USD' | 'EUR' | 'KZT';
 export type Language = 'ru' | 'en';
 export type CategoryId =
@@ -70,14 +74,16 @@ export interface Profile {
 }
 
 export interface AppData {
-  /** Version two prevents older open tabs from discarding the optional records. */
-  version: 1 | 2;
+  /** New feature versions stop older open tabs from discarding optional records. */
+  version: 1 | 2 | 3;
   profile: Profile;
   transactions: Transaction[];
   /** Optional so existing version-one backups retain their original shape. */
   shoppingList?: ShoppingItem[];
   categoryBudgets?: CategoryBudget[];
   shoppingTemplates?: ShoppingTemplate[];
+  /** Daily confirmations, independent of expenses, with all rewards derived. */
+  streak?: StreakLedger;
 }
 
 export const STORAGE_KEY = 'finance-control:data:v1';
@@ -295,7 +301,8 @@ export function validateBackup(input: unknown): AppData {
     }
   }
 
-  if (!isRecord(data) || (data.version !== 1 && data.version !== 2) || !isRecord(data.profile)) {
+  if (!isRecord(data) || ![1, 2, 3].includes(data.version as number) || !isRecord(data.profile) ||
+    (data.version === 3 && !Object.prototype.hasOwnProperty.call(data, 'streak'))) {
     throw new Error('Неподдерживаемый формат резервной копии.');
   }
   const profile = data.profile;
@@ -447,8 +454,19 @@ export function validateBackup(input: unknown): AppData {
     });
   }
 
+  let streak: StreakLedger | undefined;
+  if (Object.prototype.hasOwnProperty.call(data, 'streak')) {
+    if (!isStreakLedger(data.streak)) throw new Error(streakCopy.ru.invalidHistory);
+    streak = {
+      version: 1,
+      startedOn: data.streak.startedOn,
+      confirmedDays: data.streak.confirmedDays.map(({ date, status }) => ({ date, status }))
+        .sort((left, right) => left.date.localeCompare(right.date)),
+    };
+  }
+
   return {
-    version: data.version === 2 || categoryBudgets !== undefined || shoppingTemplates !== undefined ? 2 : 1,
+    version: streak !== undefined ? 3 : data.version === 2 || categoryBudgets !== undefined || shoppingTemplates !== undefined ? 2 : 1,
     profile: {
       name: readText(profile.name, 'Имя', 80),
       email: readText(profile.email, 'Электронная почта', 254, true),
@@ -462,6 +480,7 @@ export function validateBackup(input: unknown): AppData {
     ...(shoppingList !== undefined ? { shoppingList } : {}),
     ...(categoryBudgets !== undefined ? { categoryBudgets } : {}),
     ...(shoppingTemplates !== undefined ? { shoppingTemplates } : {}),
+    ...(streak !== undefined ? { streak } : {}),
   };
 }
 

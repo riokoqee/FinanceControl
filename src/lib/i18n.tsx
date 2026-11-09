@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import { streakCopy } from "./streakCopy";
 import type { ReactNode } from "react";
 import type { Language } from "./finance";
 
@@ -428,8 +429,10 @@ const english: Readonly<Record<string, string>> = {
 };
 
 /** Translate interface copy only; user-entered names, notes and purchases stay intact. */
+const streakEnglish = new Map<string, string>(Object.entries(streakCopy.ru).map(([key, text]) =>
+  [text, streakCopy.en[key as keyof typeof streakCopy.en]]));
 export function translate(language: Language, text: string): string {
-  return language === "en" ? (english[text] ?? text) : text;
+  return language === "en" ? (english[text] ?? streakEnglish.get(text) ?? text) : text;
 }
 const LanguageContext = createContext<Language>("ru");
 export function LanguageProvider({

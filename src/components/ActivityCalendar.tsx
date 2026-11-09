@@ -15,16 +15,19 @@ import {
 import type { Language, Transaction } from "../lib/finance";
 import { translate } from "../lib/i18n";
 import { plural } from "../lib/display";
-import { useLocalCalendarDay } from "../lib/useStreakStats";
+import { useLocalCalendarDay, useStreakStats } from "../lib/useStreakStats";
+import type { StreakLedger } from "../lib/streakTypes";
 
 const russianPlural = new Intl.PluralRules("ru");
 
 export default memo(function ActivityCalendar({
   transactions,
   language,
+  ledger,
 }: {
   transactions: Transaction[];
   language: Language;
+  ledger?: StreakLedger;
 }) {
   const tr = (text: string) => translate(language, text);
   const entryLabel = (count: number) => {
@@ -33,6 +36,7 @@ export default memo(function ActivityCalendar({
     return form === "one" ? "запись" : form === "few" ? "записи" : "записей";
   };
   const today = useLocalCalendarDay();
+  const { longest } = useStreakStats(transactions, ledger);
   const thisYear = Number(today.slice(0, 4));
   const [year, setYear] = useState(thisYear);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -129,17 +133,15 @@ export default memo(function ActivityCalendar({
       [0, 2, 4].includes(index) ? formatter.format(new Date(2026, 9, 26 + index)) : "",
     );
   }, [locale]);
-  const { activeDays, total, longest } = useMemo(() => {
-    let activeDays = 0, total = 0, streak = 0, longest = 0;
+  const { activeDays, total } = useMemo(() => {
+    let activeDays = 0, total = 0;
     for (const week of weeks) for (const day of week) {
       if (!day.inYear || day.date > today) continue;
       const count = counts[day.date] ?? 0;
       total += count;
       if (count > 0) activeDays++;
-      streak = count > 0 ? streak + 1 : 0;
-      longest = Math.max(longest, streak);
     }
-    return { activeDays, total, longest };
+    return { activeDays, total };
   }, [weeks, counts, today]);
   const detailDay =
     selectedDay && selectedDay.startsWith(String(year))

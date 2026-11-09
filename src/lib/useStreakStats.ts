@@ -1,8 +1,9 @@
 import { useSyncExternalStore } from "react";
 import type { Transaction } from "./finance";
 import { todayString } from "./finance";
-import { getStreakStats } from "./streak";
-import type { StreakStats } from "./streak";
+import { getTrackingStats } from "./streakLedger";
+import type { TrackingStats } from "./streakLedger";
+import type { StreakLedger } from "./streakTypes";
 
 const subscribers = new Set<() => void>();
 let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -37,17 +38,19 @@ export function useLocalCalendarDay(): string {
   return useSyncExternalStore(subscribe, todayString, todayString);
 }
 
-const cache = new WeakMap<readonly Transaction[], { day: string; stats: StreakStats }>();
+const cache = new WeakMap<readonly Transaction[], { day: string; ledger?: StreakLedger; stats: TrackingStats }>();
 
 /** Transaction arrays are immutable in app state; all streak widgets reuse their result. */
-export function getCachedStreakStats(transactions: readonly Transaction[], day: string): StreakStats {
+export function getCachedStreakStats(
+  transactions: readonly Transaction[], day: string, ledger?: StreakLedger,
+): TrackingStats {
   const previous = cache.get(transactions);
-  if (previous?.day === day) return previous.stats;
-  const stats = getStreakStats(transactions, new Date(`${day}T12:00:00`));
-  cache.set(transactions, { day, stats });
+  if (previous?.day === day && previous.ledger === ledger) return previous.stats;
+  const stats = getTrackingStats(transactions, ledger, new Date(`${day}T12:00:00`));
+  cache.set(transactions, { day, ledger, stats });
   return stats;
 }
 
-export function useStreakStats(transactions: readonly Transaction[]) {
-  return getCachedStreakStats(transactions, useLocalCalendarDay());
+export function useStreakStats(transactions: readonly Transaction[], ledger?: StreakLedger) {
+  return getCachedStreakStats(transactions, useLocalCalendarDay(), ledger);
 }

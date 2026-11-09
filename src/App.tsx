@@ -82,9 +82,11 @@ import {
   updateShoppingItem,
 } from "./lib/shopping";
 import StreakBadge from "./components/StreakBadge";
-import { useStreakStats } from "./lib/useStreakStats";
+import { useLocalCalendarDay, useStreakStats } from "./lib/useStreakStats";
 import type { BountyCelebration } from "./components/StreakBounty";
-import { getStreakStats } from "./lib/streak";
+import { canConfirmTrackingDay, confirmTrackingDay, getTrackingStats, reconcileStreak } from "./lib/streakLedger";
+import { mergeStreakLedgers } from "./lib/streakTypes";
+import { streakCopy } from "./lib/streakCopy";
 import { getStreakIncrease } from "./lib/pirateRanks";
 import { LanguageProvider, translate } from "./lib/i18n";
 import type { Language } from "./lib/finance";
@@ -124,6 +126,17 @@ function createRecordId(): string {
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
   );
 }
+
+/** Persist daily facts with the expense that earned them, never as a second write. */
+function withTrackingDays(previous: AppData, desired: AppData, now = new Date()): AppData {
+  const original = previous.streak ?? (previous.transactions.length
+    ? reconcileStreak(previous.transactions, undefined, now) : undefined);
+  const source = mergeStreakLedgers(original, desired.streak);
+  if (!source && desired.transactions.length === 0) return desired;
+  const streak = reconcileStreak(desired.transactions, source, now);
+  return desired.version === 3 && desired.streak === streak ? desired : { ...desired, version: 3, streak };
+}
+
 export default function App() {
   const {
     data,
@@ -136,17 +149,19 @@ export default function App() {
   const storageOk =
     !storageError && (storageStatus === "ready" || storageStatus === "empty");
   const setData = (change: AppData | ((value: AppData) => AppData)) => {
-    const next = commit(change);
+    const next = commit((current) => withTrackingDays(current,
+      typeof change === "function" ? change(current) : change));
     if (next) latest.current = { ...latest.current, data: next };
     return next;
   };
   const mutateData = (change: (value: AppData) => AppData) => {
-    const next = commitFresh(change);
+    const next = commitFresh((current) => withTrackingDays(current, change(current)));
     if (next) latest.current = { ...latest.current, data: next };
     return next;
   };
   const language = data.profile.language;
-  const streak = useStreakStats(data.transactions);
+  const localDay = useLocalCalendarDay();
+  const streak = useStreakStats(data.transactions, data.streak);
   const tr = (text: string) => translate(language, text);
   const [page, setPage] = useState<Page>(readPage);
   const [month, setMonth] = useState(currentMonth);
@@ -192,6 +207,15 @@ export default function App() {
     : undefined;
   const latest = useRef({ data, profile, page });
   latest.current = { data, profile, page };
+  useEffect(() => {
+    // Existing users adopt protection once. Empty installations remain unwritten
+    // until a real expense or check-in; recovery mode never overwrites its source.
+    if (storageStatus !== "ready" || (!data.streak && data.transactions.length === 0)) return;
+    const ledger = reconcileStreak(data.transactions, data.streak);
+    if (ledger === data.streak) return;
+    const saved = commitFresh((current) => withTrackingDays(current, current));
+    if (saved) latest.current = { ...latest.current, data: saved };
+  }, [data.transactions, data.streak, localDay, storageStatus, commitFresh]);
   const analyticsEnabled = page === "overview" || page === "tracker";
   const summary = useMemo(
     () =>
@@ -328,15 +352,10 @@ export default function App() {
   }
   function saveTransaction(value: Transaction) {
     const editing = modal !== "new";
-    const now = new Date();
-    const currentTransactions = latest.current.data.transactions;
-    const increase = editing
-      ? null
-      : getStreakIncrease(
-          getStreakStats(currentTransactions, now),
-          getStreakStats([value, ...currentTransactions], now),
-        );
-    const saved = setData((d) => {
+    const event: { increase: ReturnType<typeof getStreakIncrease> } = { increase: null };
+    const saved = mutateData((d) => {
+      event.increase = null;
+      const now = new Date();
       if (!editing && d.transactions.length >= MAX_TRANSACTIONS)
         throw new Error("В журнале может быть не больше 50 000 записей.");
       const record =
@@ -347,14 +366,17 @@ export default function App() {
               value,
             )
           : value;
-      return {
-        ...d,
-        transactions: editing
+      const transactions = editing
           ? d.transactions.map((t) => (t.id === value.id ? record : t))
-          : [record, ...d.transactions],
-      };
+          : [record, ...d.transactions];
+      if (!editing) event.increase = getStreakIncrease(
+        getTrackingStats(d.transactions, d.streak, now),
+        getTrackingStats(transactions, d.streak, now),
+      );
+      return { ...d, transactions };
     });
     if (!saved) return lastError.current;
+    const increase = event.increase;
     setMonth(value.date.slice(0, 7));
     setModal(null);
     setBountyCelebration(
@@ -380,7 +402,7 @@ export default function App() {
   function commitShoppingChange(
     change: (current: AppData) => AppData,
   ): AppData | null {
-    return setData(change);
+    return mutateData(change);
   }
   function addPlannedItem(title: string, itemCurrency: Currency): boolean {
     return Boolean(
@@ -431,10 +453,11 @@ export default function App() {
     base?: Transaction | null,
     changed?: { amount?: number; currency?: Currency },
   ): boolean {
-    const previous = latest.current.data;
-    const now = new Date();
     const eventId = createRecordId();
+    const event: { increase: ReturnType<typeof getStreakIncrease> } = { increase: null };
     const next = commitShoppingChange((current) => {
+      event.increase = null;
+      const now = new Date();
       checkShoppingBase(
         current,
         id,
@@ -445,7 +468,7 @@ export default function App() {
       const record = current.transactions.find(
         (t) => t.id === row?.transactionId,
       );
-      return saveShoppingPrice(
+      const desired = saveShoppingPrice(
         current,
         id,
         changed && changed.amount === undefined && record
@@ -457,15 +480,14 @@ export default function App() {
         eventId,
         now,
       );
+      if (desired.transactions.length > current.transactions.length) event.increase = getStreakIncrease(
+        getTrackingStats(current.transactions, current.streak, now),
+        getTrackingStats(desired.transactions, current.streak, now),
+      );
+      return desired;
     });
     if (!next) return false;
-    const increase =
-      next.transactions.length > previous.transactions.length
-        ? getStreakIncrease(
-            getStreakStats(previous.transactions, now),
-            getStreakStats(next.transactions, now),
-          )
-        : null;
+    const increase = event.increase;
     setBountyCelebration(
       increase
         ? { ...increase, id: eventId, expiresAt: Date.now() + 6000, page }
@@ -488,16 +510,17 @@ export default function App() {
     id: string,
     purchase: ShoppingPurchaseConfirmation,
   ): boolean {
-    const previous = latest.current.data;
-    const now = new Date();
     const eventId = createRecordId();
+    const event: { increase: ReturnType<typeof getStreakIncrease> } = { increase: null };
     const next = commitShoppingChange((current) => {
+      event.increase = null;
+      const now = new Date();
       checkShoppingBase(current, id, purchase.base, purchase.changed);
       const row = current.shoppingList?.find((item) => item.id === id);
       const record = current.transactions.find(
         (t) => t.id === row?.transactionId,
       );
-      return confirmShoppingPurchase(
+      const desired = confirmShoppingPurchase(
         current,
         id,
         purchase.changed.amount === undefined && record
@@ -512,15 +535,14 @@ export default function App() {
           ? undefined
           : { title: purchase.title },
       );
+      if (desired.transactions.length > current.transactions.length) event.increase = getStreakIncrease(
+        getTrackingStats(current.transactions, current.streak, now),
+        getTrackingStats(desired.transactions, current.streak, now),
+      );
+      return desired;
     });
     if (!next) return false;
-    const increase =
-      next.transactions.length > previous.transactions.length
-        ? getStreakIncrease(
-            getStreakStats(previous.transactions, now),
-            getStreakStats(next.transactions, now),
-          )
-        : null;
+    const increase = event.increase;
     setBountyCelebration(
       increase
         ? { ...increase, id: eventId, expiresAt: Date.now() + 6000, page }
@@ -533,6 +555,49 @@ export default function App() {
       pirate: increase?.promoted,
     });
     return true;
+  }
+  function confirmTrackingDate(day: string) {
+    const copy = streakCopy[language];
+    const outcome: {
+      result: "saved" | "already" | "expired";
+      noSpend: boolean;
+      increase: ReturnType<typeof getStreakIncrease>;
+    } = { result: "expired", noSpend: true, increase: null };
+    const saved = mutateData((current) => {
+      outcome.result = "expired";
+      outcome.increase = null;
+      outcome.noSpend = true;
+      const now = new Date();
+      if (!canConfirmTrackingDay(day, now)) return current;
+      const ledger = reconcileStreak(current.transactions, current.streak, now);
+      if (ledger.confirmedDays.some((entry) => entry.date === day)) {
+        outcome.result = "already";
+        return current;
+      }
+      outcome.noSpend = !current.transactions.some((transaction) => transaction.date === day || transaction.createdAt === day);
+      const nextLedger = confirmTrackingDay(current.transactions, ledger, day, outcome.noSpend ? "NO_SPEND" : "LOGGED", now);
+      if (!nextLedger.confirmedDays.some((entry) => entry.date === day)) return current;
+      outcome.result = "saved";
+      outcome.increase = getStreakIncrease(
+        getTrackingStats(current.transactions, ledger, now),
+        getTrackingStats(current.transactions, nextLedger, now),
+      );
+      return { ...current, version: 3, streak: nextLedger };
+    });
+    if (!saved) {
+      setToast({ message: copy.confirmFailed, error: true });
+      return;
+    }
+    if (outcome.result !== "saved") {
+      setToast({ message: outcome.result === "already" ? copy.noSpendAlready : copy.tooOld });
+      return;
+    }
+    // Only a freshly committed first check-in may celebrate. Replay/reload never does.
+    const celebration = outcome.increase;
+    setBountyCelebration(celebration
+      ? { ...celebration, id: `check-in-${day}`, expiresAt: Date.now() + 6000, page }
+      : null);
+    setToast({ message: outcome.noSpend ? copy.savedNoSpend : copy.savedTracking, pirate: celebration?.promoted });
   }
   function deleteTransaction(transaction: Transaction) {
     setBountyCelebration(null);
@@ -732,6 +797,9 @@ export default function App() {
         return {
           ...current,
           transactions,
+          ...(mergeStreakLedgers(current.streak, pendingImport.streak)
+            ? { streak: mergeStreakLedgers(current.streak, pendingImport.streak) }
+            : {}),
           ...(current.shoppingList || pendingImport.shoppingList
             ? { shoppingList }
             : {}),
@@ -761,6 +829,7 @@ export default function App() {
       data.shoppingList?.length ||
       data.categoryBudgets?.length ||
       data.shoppingTemplates?.length ||
+      data.streak?.confirmedDays.length ||
       data.profile.name !== "Пользователь" ||
       data.profile.email ||
       data.profile.avatar ||
@@ -933,6 +1002,7 @@ export default function App() {
             <div className="topbar-actions">
               <StreakBadge
                 transactions={data.transactions}
+                ledger={data.streak}
                 language={language}
                 onClick={() => navigate("overview")}
               />
@@ -1111,6 +1181,8 @@ export default function App() {
                       onDemo={startDemo}
                       onConfigureBudgets={() => setCategoryBudgetsOpen(true)}
                       onAddExpense={() => setModal("new")}
+                      onNoSpend={confirmTrackingDate}
+                      onConfirmDay={confirmTrackingDate}
                       onProfile={() => navigate("profile")}
                       onTracker={() => navigate("tracker")}
                       onShowAll={() => {
@@ -1216,6 +1288,8 @@ export default function App() {
                         void importBackup(file);
                       }}
                       onDemo={startDemo}
+                      onNoSpend={confirmTrackingDate}
+                      onConfirmDay={confirmTrackingDate}
                       onReset={() => setConfirmation("reset")}
                       onAddExpense={() => setModal("new")}
                     />

@@ -20,6 +20,67 @@ import {
   todayString,
   validateBackup,
 } from './finance';
+import type { StreakLedger } from './streakTypes';
+
+describe('version-three accounting-day backups', () => {
+  const streak = (): StreakLedger => ({
+    version: 1,
+    startedOn: '2026-11-09',
+    confirmedDays: [
+      { date: '2026-11-07', status: 'LOGGED' },
+      { date: '2026-11-09', status: 'NO_SPEND' },
+    ],
+  });
+
+  it('upgrades only feature-bearing copies and preserves legacy payloads', () => {
+    const legacy = createEmptyData();
+    expect(validateBackup(legacy)).toEqual(legacy);
+    expect(validateBackup({ ...legacy, version: 2 })).toEqual({ ...legacy, version: 2 });
+    expect(validateBackup({ ...legacy, streak: streak() })).toEqual({ ...legacy, version: 3, streak: streak() });
+    expect(validateBackup({ ...legacy, version: 3, streak: streak() }).version).toBe(3);
+    expect(() => validateBackup({ ...legacy, version: 4, streak: streak() })).toThrow(/формат/);
+  });
+
+  it('round-trips daily facts and discards imported reward and freeze counters', () => {
+    const source = {
+      ...createEmptyData(), version: 3,
+      streak: { ...streak(), freezes: 2, bounty: 9e15, current: 9999,
+        confirmedDays: [
+          { date: '2026-11-09', status: 'NO_SPEND', reward: 9e15 },
+          { date: '2026-11-07', status: 'LOGGED', reward: 9e15 },
+        ],
+      },
+    };
+    const restored = validateBackup(JSON.stringify(source));
+    expect(restored.streak).toEqual(streak());
+    expect(restored.streak).not.toBe(source.streak);
+    expect(restored.streak!.confirmedDays[0]).not.toBe(source.streak.confirmedDays[1]);
+    expect(source.streak.confirmedDays[0].date).toBe('2026-11-09');
+  });
+
+  it.each([
+    undefined, null, [], {},
+    { version: 2, startedOn: '2026-11-09', confirmedDays: [] },
+    { version: 1, startedOn: '2026-02-30', confirmedDays: [] },
+    { version: 1, startedOn: '2026-11-09T00:00:00Z', confirmedDays: [] },
+    { version: 1, startedOn: '2026-11-09', confirmedDays: null },
+    { version: 1, startedOn: '2026-11-09', confirmedDays: [{ date: '2026-11-08', status: 'FROZEN' }] },
+    { version: 1, startedOn: '2026-11-09', confirmedDays: [{ date: '2026-11-08', status: 'MISSED' }] },
+    { version: 1, startedOn: '2026-11-09', confirmedDays: [{ date: '2026-11-08', status: 'no_spend' }] },
+    { version: 1, startedOn: '2026-11-09', confirmedDays: [{ date: '2026-11-09', status: 'LOGGED' }, { date: '2026-11-09', status: 'NO_SPEND' }] },
+    { version: 1, startedOn: '2026-11-09', confirmedDays: [{ date: '2026-02-30', status: 'LOGGED' }] },
+    { version: 1, startedOn: '2026-11-09', confirmedDays: [null] },
+  ].map((value) => [value]))('rejects a damaged or forged accounting-day ledger', (ledger) => {
+    expect(() => validateBackup({ ...createEmptyData(), version: 3, streak: ledger })).toThrow();
+  });
+
+  it('limits retained history and keeps future local days for a timezone rollback', () => {
+    const future = { ...streak(), confirmedDays: [{ date: '2026-11-10', status: 'NO_SPEND' as const }] };
+    expect(validateBackup({ ...createEmptyData(), streak: future }).streak).toEqual(future);
+    const tooMany = { ...streak(), confirmedDays: Array.from({ length: 100_001 }, () => ({ date: '2026-11-09', status: 'LOGGED' })) };
+    expect(() => validateBackup({ ...createEmptyData(), streak: tooMany })).toThrow();
+  });
+});
 
 describe('optional category limits and shopping templates', () => {
   const extensions = () => ({

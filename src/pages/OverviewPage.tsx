@@ -69,6 +69,8 @@ interface OverviewPageProps {
   onDismissDemo: () => void;
   onDemo: () => void;
   onAddExpense: () => void;
+  onNoSpend: (day: string) => void;
+  onConfirmDay: (day: string) => void;
   onShowAll: () => void;
   onProfile: () => void;
   onTracker: () => void;
@@ -92,6 +94,8 @@ export default function OverviewPage({
   onDismissDemo,
   onDemo,
   onAddExpense,
+  onNoSpend,
+  onConfirmDay,
   onShowAll,
   onProfile,
   onTracker,
@@ -156,11 +160,14 @@ export default function OverviewPage({
       )}
       <StreakBounty
         transactions={data.transactions}
+        ledger={data.streak}
         profile={data.profile}
         language={language}
         variant="overview"
         celebration={celebration}
         onAddExpense={onAddExpense}
+        onNoSpend={onNoSpend}
+        onConfirmDay={onConfirmDay}
       />
       {showDemoBanner && data.transactions.length === 0 && (
         <div className="demo-banner">

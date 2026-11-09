@@ -2,29 +2,27 @@ import { memo } from "react";
 import { Flame } from "lucide-react";
 import type { Language, Transaction } from "../lib/finance";
 import { useStreakStats } from "../lib/useStreakStats";
+import type { StreakLedger } from "../lib/streakTypes";
+import { streakCopy, streakDayLabel, streakMessage } from "../lib/streakCopy";
 import "./StreakBadge.css";
 
-const russianPlural = new Intl.PluralRules("ru");
-
-export function dayLabel(count: number, language: Language): string {
-  if (language === "en") return `${count} ${count === 1 ? "day" : "days"}`;
-  const plural = russianPlural.select(count);
-  return `${count} ${plural === "one" ? "день" : plural === "few" ? "дня" : "дней"}`;
-}
+export const dayLabel = streakDayLabel;
 
 export default memo(function StreakBadge({
   transactions,
   language,
+  ledger,
   onClick,
 }: {
   transactions: Transaction[];
   language: Language;
+  ledger?: StreakLedger;
   onClick?: () => void;
 }) {
-  const stats = useStreakStats(transactions);
-  const label = language === "en"
-    ? `Recording streak: ${dayLabel(stats.current, language)}. ${stats.activeToday ? "Recorded today." : "Add a record today."}`
-    : `Серия записей: ${dayLabel(stats.current, language)}. ${stats.activeToday ? "Сегодня запись уже добавлена." : "Добавьте запись сегодня."}`;
+  const stats = useStreakStats(transactions, ledger);
+  const t = streakCopy[language];
+  const status = stats.todayStatus === "NO_SPEND" ? t.noSpendRecorded : stats.activeToday ? t.recorded : t.waiting;
+  const label = streakMessage(t.badge, { days: dayLabel(stats.current, language), status });
   return (
     <button
       type="button"

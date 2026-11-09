@@ -28,6 +28,7 @@ try {
   await run('tests/performance-regressions.mjs');
   await run('tests/planning-browser.mjs');
   await run('tests/design-browser.mjs');
+  await run('tests/streak-browser.mjs');
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

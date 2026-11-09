@@ -8,6 +8,8 @@ import {
   type Profile,
   type Transaction,
 } from './finance';
+import { isStreakLedger, mergeStreakLedgers } from './streakTypes';
+import { streakCopy } from './streakCopy';
 
 export { parseMoney } from './finance';
 
@@ -196,6 +198,17 @@ function mergeRecords<T extends { id: string }>(
   return result;
 }
 
+/** Ordinary edits only add/upgrade facts; their removal identifies a replacement. */
+function streakWasReplaced(original: AppData, current: AppData): boolean {
+  if (original.streak === undefined) return false;
+  if (current.streak === undefined || current.streak.startedOn > original.streak.startedOn) return true;
+  const days = new Map(current.streak.confirmedDays.map((entry) => [entry.date, entry.status]));
+  return original.streak.confirmedDays.some((entry) => {
+    const status = days.get(entry.date);
+    return status === undefined || (entry.status === 'LOGGED' && status !== 'LOGGED');
+  });
+}
+
 /** Merge against the latest persisted snapshot instead of overwriting another tab. */
 export function mergeAppData(base: AppData, current: AppData, desired: AppData): AppData {
   const original = validateBackup(base);
@@ -204,9 +217,20 @@ export function mergeAppData(base: AppData, current: AppData, desired: AppData):
   // Identity is used only within this synchronous call, after validation. It is
   // never cached or trusted by a later call with a potentially edited object.
   if (desired === base || desired === current) return remote;
+  if (streakWasReplaced(original, remote)) {
+    // Accept a read-only/no-op refresh, but never restore pre-reset days as a
+    // side effect of saving an old profile or expense editor from another tab.
+    if (same(original, local)) return remote;
+    throw new DataConflictError();
+  }
   const shoppingList = mergeRecords(original.shoppingList ?? [], remote.shoppingList ?? [], local.shoppingList ?? []);
   const categoryBudgets = mergeRecords(original.categoryBudgets ?? [], remote.categoryBudgets ?? [], local.categoryBudgets ?? [], { atomic: true });
   const shoppingTemplates = mergeRecords(original.shoppingTemplates ?? [], remote.shoppingTemplates ?? [], local.shoppingTemplates ?? []);
+  // A confirmation is an immutable daily fact, so a stale tab may add facts but
+  // cannot erase another tab's day or duplicate derived freeze/reward credits.
+  const streak = mergeStreakLedgers(
+    mergeStreakLedgers(original.streak, remote.streak), local.streak,
+  );
   return validateBackup({
     version: Math.max(original.version, remote.version, local.version),
     profile: mergeFields(original.profile, remote.profile, local.profile),
@@ -214,6 +238,7 @@ export function mergeAppData(base: AppData, current: AppData, desired: AppData):
     ...([original, remote, local].some((data) => data.shoppingList !== undefined) ? { shoppingList } : {}),
     ...([original, remote, local].some((data) => data.categoryBudgets !== undefined) ? { categoryBudgets } : {}),
     ...([original, remote, local].some((data) => data.shoppingTemplates !== undefined) ? { shoppingTemplates } : {}),
+    ...(streak !== undefined ? { streak } : {}),
   });
 }
 
@@ -247,6 +272,10 @@ function shareUnchanged(previous: AppData, next: AppData): AppData {
         ? next.shoppingTemplates
         : shareRecords(previous.shoppingTemplates, next.shoppingTemplates),
     } : {}),
+    ...(next.streak !== undefined ? {
+      streak: previous.streak !== undefined && same(previous.streak, next.streak)
+        ? previous.streak : next.streak,
+    } : {}),
   };
 }
 
@@ -264,6 +293,14 @@ function retainRecordOrder<T extends { id: string }>(previous: T[], next: T[]): 
   }
   for (const record of next) if (remaining.has(record.id)) result.push(record);
   return result;
+}
+
+/** Only an explicit full replacement/reset may remove confirmed accounting days. */
+function retainConfirmedDays(previous: AppData, candidate: AppData): AppData {
+  if (previous.streak === undefined) return candidate;
+  const streak = mergeStreakLedgers(previous.streak, candidate.streak);
+  if (!isStreakLedger(streak)) throw new Error(streakCopy.ru.invalidHistory);
+  return { ...candidate, version: 3, streak };
 }
 
 /**
@@ -284,7 +321,7 @@ export function commitStoredData(
     if (options.replaceCorrupt) {
       next = validateBackup(desired);
     } else if (raw === serializedBase) {
-      const candidate = validateBackup(desired);
+      const candidate = retainConfirmedDays(base, validateBackup(desired));
       next = {
         ...candidate,
         transactions: retainRecordOrder(base.transactions, candidate.transactions),
@@ -333,7 +370,8 @@ export function commitStoredMutation(
     if ((stored.status === 'corrupt' || stored.status === 'recovered') && !options.replaceCorrupt) {
       throw new StorageRecoveryError();
     }
-    const candidate = validateBackup(update(stored.data));
+    const desired = validateBackup(update(stored.data));
+    const candidate = options.replaceCorrupt ? desired : retainConfirmedDays(stored.data, desired);
     const next: AppData = {
       ...candidate,
       transactions: retainRecordOrder(stored.data.transactions, candidate.transactions),

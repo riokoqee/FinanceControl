@@ -65,6 +65,26 @@ describe('BeliLog PDF reports', () => {
     expect(restored.shoppingTemplates).toEqual(data.shoppingTemplates);
   });
 
+  it('restores accounting-day confirmations from a version-three backup attachment', async () => {
+    const withStreak: AppData = {
+      ...data, version: 3,
+      streak: {
+        version: 1, startedOn: '2026-11-09',
+        confirmedDays: [
+          { date: '2026-10-27', status: 'LOGGED' },
+          { date: '2026-11-09', status: 'NO_SPEND' },
+        ],
+      },
+    };
+    const fullBackup = await buildPdf(withStreak, { transactions: [], includeBackup: true });
+    expect(await readPdfBackup(fullBackup)).toEqual(withStreak);
+    // Version-two files created before accounting-day confirmations remain readable.
+    expect(await readPdfBackup(report)).toEqual(data);
+    const ordinary = await buildPdf(withStreak, { transactions: [] });
+    const names = (await PDFDocument.load(ordinary)).catalog.lookupMaybe(PDFName.of('Names'), PDFDict);
+    expect(names?.lookupMaybe(PDFName.of('EmbeddedFiles'), PDFDict)).toBeUndefined();
+  }, 30_000);
+
   it('paginates long notes, unbroken names and many purchase items', async () => {
     const longEntry = {
       ...data.transactions[0],

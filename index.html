@@ -12,7 +12,7 @@
           const readTheme = (raw) => {
             const data = JSON.parse(raw);
             const value = data?.profile?.theme;
-            return (data?.version === 1 || data?.version === 2) &&
+            return (data?.version === 1 || data?.version === 2 || data?.version === 3) &&
               (value === 'light' || value === 'dark' || value === 'system') ? value : undefined;
           };
           const raw = localStorage.getItem('finance-control:data:v1');
