@@ -1,11 +1,14 @@
+import { localizeError } from "../lib/localizedError";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AppData } from "../lib/finance";
 import { STORAGE_KEY } from "../lib/finance";
 import {
   commitStoredData,
   commitStoredMutation,
+  commitStoredOperation,
   readStoredData,
 } from "../lib/storage/storage";
+import type { StoredOperation, StoredOperationResult } from "../lib/storage/storage";
 
 type Change = AppData | ((current: AppData) => AppData);
 
@@ -18,21 +21,20 @@ export function usePersistentData() {
   const [error, setError] = useState("");
   const lastError = useRef("");
   const persist = useCallback(
-    (write: (base: AppData) => AppData): AppData | null => {
+    <R,>(write: (base: AppData) => StoredOperationResult<R>): StoredOperationResult<R> | null => {
       try {
-        const next = write(current.current);
+        const committed = write(current.current);
+        const next = committed.data;
         // Event handlers can flush several rows before React renders.
         current.current = next;
         renderData(next);
         setStatus("ready");
         setError("");
         lastError.current = "";
-        return next;
+        return committed;
       } catch (cause) {
         lastError.current =
-          cause instanceof Error
-            ? cause.message
-            : "Не удалось сохранить изменения в браузере.";
+          localizeError(current.current.profile.language, cause, "error.saveFailed");
         setError(lastError.current);
         return null;
       }
@@ -43,13 +45,18 @@ export function usePersistentData() {
     (change: Change, replaceCorrupt = false) =>
       persist((base) => {
         const desired = typeof change === "function" ? change(base) : change;
-        return commitStoredData(base, desired, undefined, { replaceCorrupt });
-      }),
+        return { data: commitStoredData(base, desired, undefined, { replaceCorrupt }), result: undefined };
+      })?.data ?? null,
     [persist],
   );
   const commitFresh = useCallback(
     (change: (current: AppData) => AppData) =>
-      persist((base) => commitStoredMutation(base, change)),
+      persist((base) => ({ data: commitStoredMutation(base, change), result: undefined }))?.data ?? null,
+    [persist],
+  );
+  const commitOperation = useCallback(
+    <R,>(operation: StoredOperation<R>): StoredOperationResult<R> | null =>
+      persist((base) => commitStoredOperation(base, operation)),
     [persist],
   );
   useEffect(() => {
@@ -65,5 +72,5 @@ export function usePersistentData() {
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
   }, []);
-  return { data, current, commit, commitFresh, status, error, lastError };
+  return { data, current, commit, commitFresh, commitOperation, status, error, lastError };
 }

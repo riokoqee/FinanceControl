@@ -1,8 +1,11 @@
+import type { MessageKey } from "./messages";
+import { LocalizedError } from "./localizedError";
 import { isStreakLedger } from './streak/streakTypes';
 import type { StreakLedger } from './streak/streakTypes';
-import { streakCopy } from './streak/streakCopy';
-import { currencyCopy, isExchangeRates, REFERENCE_RATES } from './currency';
+import { isExchangeRates, REFERENCE_RATES } from './currency';
 import type { ExchangeRates } from './currency';
+import { APP_DATA_VERSIONS, isSupportedAppDataVersion, withCanonicalVersion } from './appDataVersion';
+import type { AppDataVersion } from './appDataVersion';
 export type { ExchangeRates } from './currency';
 export { REFERENCE_RATES } from './currency';
 
@@ -81,7 +84,7 @@ export interface Profile {
 
 export interface AppData {
   /** New feature versions stop older open tabs from discarding optional records. */
-  version: 1 | 2 | 3 | 4;
+  version: AppDataVersion;
   profile: Profile;
   transactions: Transaction[];
   /** Optional so existing version-one backups retain their original shape. */
@@ -98,25 +101,27 @@ export const CURRENCIES: ReadonlyArray<{
   code: Currency;
   symbol: string;
   label: string;
+  labelKey: MessageKey;
 }> = [
-  { code: 'USD', symbol: '$', label: 'Доллар США' },
-  { code: 'EUR', symbol: '€', label: 'Евро' },
-  { code: 'KZT', symbol: '₸', label: 'Казахстанский тенге' },
+  { code: 'USD', symbol: '$', label: 'Доллар США', labelKey: "currency.usd" },
+  { code: 'EUR', symbol: '€', label: 'Евро', labelKey: "currency.eur" },
+  { code: 'KZT', symbol: '₸', label: 'Казахстанский тенге', labelKey: "currency.kzt" },
 ];
 
 export const CATEGORIES: ReadonlyArray<{
   id: CategoryId;
   label: string;
+  labelKey: MessageKey;
   color: string;
   icon: string;
 }> = [
-  { id: 'food', label: 'Еда и продукты', color: '#9bb49b', icon: 'UtensilsCrossed' },
-  { id: 'shopping', label: 'Покупки', color: '#b6a0cc', icon: 'ShoppingBag' },
-  { id: 'transport', label: 'Транспорт', color: '#91aeca', icon: 'TramFront' },
-  { id: 'home', label: 'Дом', color: '#d9b88f', icon: 'House' },
-  { id: 'entertainment', label: 'Развлечения', color: '#d29d9d', icon: 'Clapperboard' },
-  { id: 'health', label: 'Здоровье', color: '#8fbbb4', icon: 'HeartPulse' },
-  { id: 'other', label: 'Другое', color: '#a6a6ae', icon: 'Ellipsis' },
+  { id: 'food', label: 'Еда и продукты', labelKey: "category.food", color: '#9bb49b', icon: 'UtensilsCrossed' },
+  { id: 'shopping', label: 'Покупки', labelKey: "category.shopping", color: '#b6a0cc', icon: 'ShoppingBag' },
+  { id: 'transport', label: 'Транспорт', labelKey: "category.transport", color: '#91aeca', icon: 'TramFront' },
+  { id: 'home', label: 'Дом', labelKey: "category.home", color: '#d9b88f', icon: 'House' },
+  { id: 'entertainment', label: 'Развлечения', labelKey: "category.entertainment", color: '#d29d9d', icon: 'Clapperboard' },
+  { id: 'health', label: 'Здоровье', labelKey: "category.health", color: '#8fbbb4', icon: 'HeartPulse' },
+  { id: 'other', label: 'Другое', labelKey: "category.other", color: '#a6a6ae', icon: 'Ellipsis' },
 ];
 
 
@@ -134,9 +139,9 @@ export const MAX_TRANSACTIONS = 50_000;
 export const MAX_BACKUP_LENGTH = 30_000_000;
 export const MAX_SHOPPING_TEMPLATES = 20;
 export const MAX_TEMPLATE_ITEMS = 200;
+export const MAX_SHOPPING_ITEMS = 1_000;
 const MAX_ITEMS = 200;
 const MAX_AVATAR_LENGTH = 500_000;
-const MAX_SHOPPING_ITEMS = 1_000;
 
 type StorageAdapter = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -151,7 +156,7 @@ export function parseMoney(input: string, allowZero = false): number | null {
 }
 
 export function createEmptyData(): AppData {
-  return { version: 1, profile: { ...DEFAULT_PROFILE }, transactions: [] };
+  return { version: APP_DATA_VERSIONS.legacy, profile: { ...DEFAULT_PROFILE }, transactions: [] };
 }
 
 /** Format a local date explicitly so a UTC offset cannot move it to yesterday. */
@@ -277,13 +282,13 @@ function validAvatar(value: unknown): value is string {
   return match !== null && match[1].length % 4 === 0;
 }
 
-function readText(value: unknown, label: string, limit: number, allowEmpty = false): string {
+function readText(value: unknown, label: MessageKey, limit: number, allowEmpty = false): string {
   if (typeof value !== 'string' || value.length > limit) {
-    throw new Error(`Некорректное поле «${label}» в резервной копии.`);
+    throw new LocalizedError("ui.invalidFieldFieldInTheBackup", { field: { key: label } });
   }
   const text = value.trim();
   if (!allowEmpty && text.length === 0) {
-    throw new Error(`Поле «${label}» не может быть пустым.`);
+    throw new LocalizedError("ui.fieldFieldCannotBeEmpty", { field: { key: label } });
   }
   return text;
 }
@@ -295,18 +300,18 @@ function readText(value: unknown, label: string, limit: number, allowEmpty = fal
 export function validateBackup(input: unknown): AppData {
   let data = input;
   if (typeof input === 'string') {
-    if (input.length > MAX_BACKUP_LENGTH) throw new Error('Файл резервной копии слишком большой.');
+    if (input.length > MAX_BACKUP_LENGTH) throw new LocalizedError("ui.theBackupFileIsTooLarge");
     try {
       data = JSON.parse(input) as unknown;
     } catch {
-      throw new Error('Не удалось прочитать JSON. Выберите резервную копию BeliLog.');
+      throw new LocalizedError("ui.couldNotReadJsonChooseABelilogBackup");
     }
   }
 
-  if (!isRecord(data) || ![1, 2, 3, 4].includes(data.version as number) || !isRecord(data.profile) ||
-    (data.version === 3 && !Object.prototype.hasOwnProperty.call(data, 'streak')) ||
-    (data.version === 4 && !Object.prototype.hasOwnProperty.call(data.profile, 'exchangeRates'))) {
-    throw new Error('Неподдерживаемый формат резервной копии.');
+  if (!isRecord(data) || !isSupportedAppDataVersion(data.version) || !isRecord(data.profile) ||
+    (data.version === APP_DATA_VERSIONS.streak && !Object.prototype.hasOwnProperty.call(data, 'streak')) ||
+    (data.version === APP_DATA_VERSIONS.manualRates && !Object.prototype.hasOwnProperty.call(data.profile, 'exchangeRates'))) {
+    throw new LocalizedError("ui.unsupportedBackupFormat");
   }
   const profile = data.profile;
   if (
@@ -316,11 +321,11 @@ export function validateBackup(input: unknown): AppData {
     (profile.language !== undefined && profile.language !== 'ru' && profile.language !== 'en') ||
     (profile.avatar !== undefined && !validAvatar(profile.avatar))
   ) {
-    throw new Error('Настройки профиля в резервной копии некорректны.');
+    throw new LocalizedError("ui.theBackupContainsInvalidProfileSettings");
   }
   let exchangeRates: ExchangeRates | undefined;
   if (Object.prototype.hasOwnProperty.call(profile, 'exchangeRates')) {
-    if (!isExchangeRates(profile.exchangeRates)) throw new Error(currencyCopy.ru.invalidRates);
+    if (!isExchangeRates(profile.exchangeRates)) throw new LocalizedError("ui.exchangeRatesAreInvalidEnterPositiveValuesFrom0000001To1000000WithAtMost6DecimalPlacesTheUsdBaseRateMustBe1");
     exchangeRates = {
       USD: 1,
       EUR: profile.exchangeRates.EUR,
@@ -328,7 +333,7 @@ export function validateBackup(input: unknown): AppData {
     };
   }
   if (!Array.isArray(data.transactions) || data.transactions.length > MAX_TRANSACTIONS) {
-    throw new Error('Некорректный список расходов в резервной копии.');
+    throw new LocalizedError("ui.theBackupContainsAnInvalidExpenseList");
   }
 
   const ids = new Set<string>();
@@ -340,46 +345,46 @@ export function validateBackup(input: unknown): AppData {
       !isCategory(item.category) ||
       !isValidDate(item.date)
     ) {
-      throw new Error('Один из расходов содержит некорректную сумму, валюту, категорию или дату.');
+      throw new LocalizedError("ui.anExpenseContainsAnInvalidAmountCurrencyCategoryOrDate");
     }
-    const id = readText(item.id, 'ID расхода', 128);
-    if (ids.has(id)) throw new Error('В резервной копии найдены повторяющиеся ID расходов.');
+    const id = readText(item.id, "field.expenseId", 128);
+    if (ids.has(id)) throw new LocalizedError("ui.theBackupContainsDuplicateExpenseIds");
     ids.add(id);
     const transaction: Transaction = {
       id,
-      title: readText(item.title, 'Название расхода', 160),
+      title: readText(item.title, "field.expenseTitle", 160),
       amount: item.amount,
       currency: item.currency,
       category: item.category,
       date: item.date,
     };
     if (item.note !== undefined) {
-      transaction.note = readText(item.note, 'Заметка', 2_000, true);
+      transaction.note = readText(item.note, "field.note", 2_000, true);
     }
     if (item.createdAt !== undefined) {
-      if (!isValidDate(item.createdAt)) throw new Error('Некорректная дата создания расхода.');
+      if (!isValidDate(item.createdAt)) throw new LocalizedError("ui.invalidExpenseCreationDate");
       transaction.createdAt = item.createdAt;
     }
     if (item.items !== undefined) {
       if (!Array.isArray(item.items) || item.items.length > MAX_ITEMS) {
-        throw new Error('В одном расходе может быть не больше 200 покупок.');
+        throw new LocalizedError("ui.anExpenseCanContainUpTo200Items");
       }
       const itemIds = new Set<string>();
       transaction.items = item.items.map((entry: unknown): TransactionItem => {
         if (!isRecord(entry) || !validAmount(entry.amount) || Math.round(entry.amount * 100) < 1) {
-          throw new Error('Одна из покупок содержит некорректную сумму.');
+          throw new LocalizedError("ui.anItemContainsAnInvalidAmount");
         }
-        const itemId = readText(entry.id, 'ID покупки', 128);
-        if (itemIds.has(itemId)) throw new Error('В расходе найдены повторяющиеся ID покупок.');
+        const itemId = readText(entry.id, "field.purchaseId", 128);
+        if (itemIds.has(itemId)) throw new LocalizedError("ui.theExpenseContainsDuplicateItemIds");
         itemIds.add(itemId);
         return {
           id: itemId,
-          title: readText(entry.title, 'Название покупки', 160),
+          title: readText(entry.title, "field.purchaseTitle", 160),
           amount: entry.amount,
         };
       });
       if (Math.round(getItemTotal(transaction) * 100) > Math.round(transaction.amount * 100)) {
-        throw new Error('Сумма покупок превышает общую сумму расхода.');
+        throw new LocalizedError("ui.theItemTotalExceedsTheExpenseAmount");
       }
     }
     return transaction;
@@ -389,29 +394,29 @@ export function validateBackup(input: unknown): AppData {
   let shoppingList: ShoppingItem[] | undefined;
   if (Object.prototype.hasOwnProperty.call(data, 'shoppingList')) {
     if (!Array.isArray(data.shoppingList) || data.shoppingList.length > MAX_SHOPPING_ITEMS) {
-      throw new Error('В списке покупок может быть не больше 1000 товаров.');
+      throw new LocalizedError("ui.theShoppingListCanContainUpTo1000Products");
     }
     const shoppingIds = new Set<string>();
     const linkedTransactions = new Set<string>();
     shoppingList = data.shoppingList.map((item: unknown): ShoppingItem => {
       if (!isRecord(item) || !isCurrency(item.currency) || !isValidDate(item.createdAt)) {
-        throw new Error('Один из товаров содержит некорректную валюту или дату создания.');
+        throw new LocalizedError("ui.anItemContainsAnInvalidCurrencyOrCreationDate");
       }
-      const id = readText(item.id, 'ID товара', 128);
-      if (shoppingIds.has(id)) throw new Error('В списке покупок найдены повторяющиеся ID товаров.');
+      const id = readText(item.id, "field.shoppingItemId", 128);
+      if (shoppingIds.has(id)) throw new LocalizedError("ui.theShoppingListContainsDuplicateItemIds");
       shoppingIds.add(id);
       const shoppingItem: ShoppingItem = {
         id,
-        title: readText(item.title, 'Название товара', 160),
+        title: readText(item.title, "field.shoppingItemTitle", 160),
         currency: item.currency,
         createdAt: item.createdAt,
       };
       if (item.transactionId !== undefined) {
-        const transactionId = readText(item.transactionId, 'ID связанного расхода', 128);
+        const transactionId = readText(item.transactionId, "field.linkedExpenseId", 128);
         // An expense can be deleted independently; the product then becomes pending.
         if (ids.has(transactionId)) {
           if (linkedTransactions.has(transactionId)) {
-            throw new Error('Один расход не может быть связан с несколькими товарами.');
+            throw new LocalizedError("ui.anExpenseCannotBeLinkedToMultipleShoppingItems");
           }
           linkedTransactions.add(transactionId);
           shoppingItem.transactionId = transactionId;
@@ -428,15 +433,15 @@ export function validateBackup(input: unknown): AppData {
   let categoryBudgets: CategoryBudget[] | undefined;
   if (Object.prototype.hasOwnProperty.call(data, 'categoryBudgets')) {
     if (!Array.isArray(data.categoryBudgets) || data.categoryBudgets.length > CATEGORIES.length) {
-      throw new Error('Некорректный список лимитов по категориям.');
+      throw new LocalizedError("ui.invalidCategoryBudgetList");
     }
     const categories = new Set<CategoryId>();
     categoryBudgets = data.categoryBudgets.map((entry: unknown): CategoryBudget => {
       if (!isRecord(entry) || !isCategory(entry.id) || !isCurrency(entry.currency) ||
         !validAmount(entry.amount) || parseMoney(String(entry.amount)) !== entry.amount) {
-        throw new Error('Один из лимитов содержит некорректную категорию, валюту или сумму.');
+        throw new LocalizedError("ui.aBudgetContainsAnInvalidCategoryCurrencyOrAmount");
       }
-      if (categories.has(entry.id)) throw new Error('В резервной копии найдены повторяющиеся лимиты категорий.');
+      if (categories.has(entry.id)) throw new LocalizedError("ui.theBackupContainsDuplicateCategoryBudgets");
       categories.add(entry.id);
       return { id: entry.id, amount: entry.amount, currency: entry.currency };
     });
@@ -445,22 +450,22 @@ export function validateBackup(input: unknown): AppData {
   let shoppingTemplates: ShoppingTemplate[] | undefined;
   if (Object.prototype.hasOwnProperty.call(data, 'shoppingTemplates')) {
     if (!Array.isArray(data.shoppingTemplates) || data.shoppingTemplates.length > MAX_SHOPPING_TEMPLATES) {
-      throw new Error('Можно сохранить не больше 20 шаблонов покупок.');
+      throw new LocalizedError("ui.youCanSaveUpTo20ShoppingTemplates");
     }
     const templateIds = new Set<string>();
     shoppingTemplates = data.shoppingTemplates.map((entry: unknown): ShoppingTemplate => {
       if (!isRecord(entry) || !Array.isArray(entry.items) || entry.items.length < 1 || entry.items.length > MAX_TEMPLATE_ITEMS) {
-        throw new Error('В шаблоне должно быть от 1 до 200 товаров.');
+        throw new LocalizedError("ui.aTemplateMustContain1200Items");
       }
-      const id = readText(entry.id, 'ID шаблона', 128);
-      if (templateIds.has(id)) throw new Error('В резервной копии найдены повторяющиеся ID шаблонов.');
+      const id = readText(entry.id, "field.templateId", 128);
+      if (templateIds.has(id)) throw new LocalizedError("ui.theBackupContainsDuplicateTemplateIds");
       templateIds.add(id);
       return {
         id,
-        name: readText(entry.name, 'Название шаблона', 60),
+        name: readText(entry.name, "field.templateName", 60),
         items: entry.items.map((item: unknown): ShoppingTemplateItem => {
-          if (!isRecord(item) || !isCurrency(item.currency)) throw new Error('Некорректная валюта товара в шаблоне.');
-          return { title: readText(item.title, 'Название товара', 160), currency: item.currency };
+          if (!isRecord(item) || !isCurrency(item.currency)) throw new LocalizedError("ui.invalidItemCurrencyInTheTemplate");
+          return { title: readText(item.title, "field.shoppingItemTitle", 160), currency: item.currency };
         }),
       };
     });
@@ -468,20 +473,20 @@ export function validateBackup(input: unknown): AppData {
 
   let streak: StreakLedger | undefined;
   if (Object.prototype.hasOwnProperty.call(data, 'streak')) {
-    if (!isStreakLedger(data.streak)) throw new Error(streakCopy.ru.invalidHistory);
+    if (!isStreakLedger(data.streak)) throw new LocalizedError("ui.theBackupContainsInvalidCheckInHistory");
     streak = {
-      version: 1,
+      version: data.streak.version,
       startedOn: data.streak.startedOn,
       confirmedDays: data.streak.confirmedDays.map(({ date, status }) => ({ date, status }))
         .sort((left, right) => left.date.localeCompare(right.date)),
     };
   }
 
-  return {
-    version: exchangeRates !== undefined ? 4 : streak !== undefined ? 3 : data.version === 2 || categoryBudgets !== undefined || shoppingTemplates !== undefined ? 2 : 1,
+  return withCanonicalVersion({
+    version: data.version,
     profile: {
-      name: readText(profile.name, 'Имя', 80),
-      email: readText(profile.email, 'Электронная почта', 254, true),
+      name: readText(profile.name, "field.name", 80),
+      email: readText(profile.email, "field.email", 254, true),
       currency: profile.currency,
       monthlyBudget: profile.monthlyBudget,
       theme: profile.theme as Profile['theme'],
@@ -494,7 +499,7 @@ export function validateBackup(input: unknown): AppData {
     ...(categoryBudgets !== undefined ? { categoryBudgets } : {}),
     ...(shoppingTemplates !== undefined ? { shoppingTemplates } : {}),
     ...(streak !== undefined ? { streak } : {}),
-  };
+  });
 }
 
 /** Corrupt or unavailable browser storage must never prevent opening the app. */
@@ -559,7 +564,7 @@ export function createDemoData(now = new Date()): AppData {
   ];
 
   return {
-    version: 1,
+    version: APP_DATA_VERSIONS.legacy,
     profile: { ...DEFAULT_PROFILE, name: 'Александр', monthlyBudget: 1200 },
     transactions: entries.map((entry, index) => ({ ...entry, createdAt: entry.date, id: `demo-${prefix}-${index + 1}` })),
   };

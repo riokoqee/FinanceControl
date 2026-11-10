@@ -1,3 +1,5 @@
+import type { MessageKey } from "../lib/messages";
+import { message } from "../lib/messages";
 import { useId, useMemo } from "react";
 import type { ReactNode } from "react";
 import {
@@ -33,7 +35,7 @@ import BudgetState from "../components/BudgetState";
 import "../components/CategoryBudgetsDialog.css";
 
 const NO_CATEGORY_BUDGETS: CategoryBudget[] = [];
-const categoryLabels = new Map(CATEGORIES.map((category) => [category.id, category.label]));
+const categoryLabels = new Map(CATEGORIES.map((category) => [category.id, category.labelKey]));
 
 const categoryColors: Record<CategoryId, string> = {
   food: "var(--chart-food)",
@@ -106,7 +108,7 @@ export default function OverviewPage({
   onDelete,
   emptyState,
 }: OverviewPageProps) {
-  const tr = (text: string) => translate(language, text);
+  const tr = (text: MessageKey) => translate(language, text);
   const patternId = useId().replace(/:/g, '');
   const today = useLocalCalendarDay();
   const {
@@ -149,7 +151,7 @@ export default function OverviewPage({
       {streakCurrent === 0 && (
         <section className="voyage-banner" aria-label="BeliLog">
           <div className="voyage-copy">
-            <strong>{tr("Навстречу своим сокровищам")}</strong>
+            <strong>{tr("ui.towardsYourTreasure")}</strong>
           </div>
           <div className="voyage-art" aria-hidden="true">
             <img
@@ -165,11 +167,11 @@ export default function OverviewPage({
             <Sparkles size={21} />
           </span>
           <button className="demo-link" onClick={onDemo}>
-            {tr("Посмотреть демо")} <ArrowUpRight size={16} />
+            {tr("ui.exploreDemo")} <ArrowUpRight size={16} />
           </button>
           <button
             className="icon-button demo-dismiss"
-            aria-label={tr("Скрыть подсказку")}
+            aria-label={tr("ui.dismissTip")}
             onClick={onDismissDemo}
           >
             <X size={16} />
@@ -191,7 +193,7 @@ export default function OverviewPage({
       <div className="overview-stats">
         <div className="stat-card stat-card-featured">
           <div className="stat-label">
-            {tr("Расходы за месяц")}
+            {tr("ui.monthlySpending")}
             <span className="stat-icon">
               <ArrowUpRight size={18} />
             </span>
@@ -208,15 +210,15 @@ export default function OverviewPage({
                   {changePercent > 0 ? "+" : ""}
                   {Math.round(changePercent)}%
                 </span>
-                <span>{tr("к прошлому месяцу")}</span>
+                <span>{tr("ui.comparedWithLastMonth")}</span>
               </>
             ) : (
               <>
                 <span className="tiny-dot" />
                 <span>
                   {transactions.length
-                    ? `${transactions.length} ${plural(transactions.length, tr("запись"), tr("записи"), tr("записей"), language)}`
-                    : tr("Пока нет расходов")}
+                    ? `${transactions.length} ${plural(transactions.length, tr("ui.record"), tr("ui.records"), tr("ui.recordsAlternative"), language)}`
+                    : tr("ui.noExpensesYet")}
                 </span>
               </>
             )}
@@ -230,7 +232,7 @@ export default function OverviewPage({
         </div>
         <div className="stat-card stat-card-budget" data-state={budget ? progress > 100 ? 'over' : progress >= 80 ? 'warning' : 'normal' : undefined}>
           <div className="stat-label">
-            {budget ? tr("Осталось в бюджете") : tr("Месячный бюджет")}
+            {budget ? tr("ui.budgetRemaining") : tr("ui.monthlyBudget")}
             <span className="stat-icon">
               <Wallet size={18} />
             </span>
@@ -239,7 +241,7 @@ export default function OverviewPage({
             {budget ? (
               shortMoney(remaining, currency, language)
             ) : (
-              <span className="unset-value">{tr("Не задан")}</span>
+              <span className="unset-value">{tr("ui.notSet")}</span>
             )}
           </div>
           <div className="stat-footer">
@@ -252,20 +254,20 @@ export default function OverviewPage({
                 </span>
                 <span>
                   {Math.round(progress)}
-                  {tr("% использовано")}
+                  {tr("ui.used")}
                 </span>
                 <BudgetState state={progress > 100 ? 'over' : progress >= 80 ? 'warning' : 'normal'} language={language} reached={progress === 100} />
               </>
             ) : (
               <button className="inline-link" onClick={() => onProfile()}>
-                {tr("Задать комфортный лимит")} <ArrowRight size={14} />
+                {tr("ui.setAComfortableLimit")} <ArrowRight size={14} />
               </button>
             )}
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-label">
-            {tr("В среднем за день")}
+            {tr("ui.dailyAverage")}
             <span className="stat-icon">
               <TrendingUp size={18} />
             </span>
@@ -279,8 +281,8 @@ export default function OverviewPage({
             </span>
             <span>
               {elapsedDays
-                ? `${tr("За")} ${elapsedDays} ${plural(elapsedDays, tr("день"), tr("дня"), tr("дней"), language)} ${tr("месяца")}`
-                : tr("Месяц ещё не начался")}
+                ? `${tr("ui.over")} ${elapsedDays} ${plural(elapsedDays, tr("ui.day"), tr("ui.days"), tr("ui.daysAlternative"), language)} ${tr("ui.thisMonthAlternative")}`
+                : tr("ui.thisMonthHasNotStartedYet")}
             </span>
           </div>
         </div>
@@ -289,20 +291,20 @@ export default function OverviewPage({
         <section className="panel chart-panel">
           <div className="panel-header">
             <div>
-              <h2>{tr("Динамика расходов")}</h2>
+              <h2>{tr("ui.spendingOverTime")}</h2>
             </div>
             <div className="segment-control">
               <button
                 className={chartRange === "week" ? "segment-active" : ""}
                 onClick={() => onChartRangeChange("week")}
               >
-                {tr("7 дней")}
+                {tr("ui.7Days")}
               </button>
               <button
                 className={chartRange === "month" ? "segment-active" : ""}
                 onClick={() => onChartRangeChange("month")}
               >
-                {tr("Месяц")}
+                {tr("ui.month")}
               </button>
             </div>
           </div>
@@ -317,7 +319,7 @@ export default function OverviewPage({
           {chartRange === "week" && (
             <div className="chart-legend">
               <span className="chart-legend-note">
-                {tr("Последние 7 дней выбранного месяца")}
+                {tr("ui.last7DaysOfTheSelectedMonth")}
               </span>
             </div>
           )}
@@ -325,10 +327,10 @@ export default function OverviewPage({
         <section className="panel category-panel">
           <div className="panel-header">
             <div>
-              <h2>{tr("Куда уходят деньги")}</h2>
+              <h2>{tr("ui.whereYourMoneyGoes")}</h2>
             </div>
             <button className="section-link category-limits-button" onClick={onConfigureBudgets}>
-              {language === "en" ? "Limits" : "Лимиты"}
+              {message(language, "ui.limits")}
             </button>
           </div>
           <div className="donut-wrap">
@@ -338,8 +340,8 @@ export default function OverviewPage({
               role="img"
               aria-label={
                 total
-                  ? tr("Распределение расходов по категориям")
-                  : tr("Пока нет расходов по категориям")
+                  ? tr("ui.spendingBreakdownByCategory")
+                  : tr("ui.noCategorySpendingYet")
               }
             >
               <defs>
@@ -375,7 +377,7 @@ export default function OverviewPage({
                     transform="rotate(-90 90 90)"
                   >
                     <title>
-                      {tr(c.label)}: {formatMoney(c.value, currency, language)}
+                      {tr(c.labelKey)}: {formatMoney(c.value, currency, language)}
                     </title>
                   </circle>
                 );
@@ -387,12 +389,12 @@ export default function OverviewPage({
                 {categories.length
                   ? plural(
                       categories.length,
-                      tr("категория"),
-                      tr("категории"),
-                      tr("категорий"),
+                      tr("ui.categoryAlternative"),
+                      tr("ui.categories"),
+                      tr("ui.categoriesAlternative"),
                       language,
                     )
-                  : tr("Всё впереди")}
+                  : tr("ui.aFreshStart")}
               </small>
             </div>
           </div>
@@ -409,7 +411,7 @@ export default function OverviewPage({
                     </span>
                     <span className="category-budget-percent">{Math.round(limit.percent)}%</span>
                   </div>
-                  <div className="category-budget-track" role="progressbar" aria-label={`${label}: ${language === "en" ? "monthly limit" : "лимит на месяц"}`}
+                  <div className="category-budget-track" role="progressbar" aria-label={`${label}: ${message(language, "ui.monthlyLimit")}`}
                     aria-valuemin={0} aria-valuemax={100} aria-valuenow={limit.progress}
                     aria-valuetext={`${amounts}; ${Math.round(limit.percent)}%`}>
                     <span style={{ width: `${limit.progress}%` }} />
@@ -418,7 +420,7 @@ export default function OverviewPage({
                     <span>{amounts}</span>
                     <BudgetState state={limit.state} language={language} reached={limit.percent === 100} />
                     {limit.state === "over" && <span className="category-budget-overrun">
-                      {language === "en" ? "Over by " : "Сверх "}{formatMoney(-limit.remaining, limit.currency, language)}
+                      {message(language, "ui.overBy")}{formatMoney(-limit.remaining, limit.currency, language)}
                     </span>}
                   </div>
                 </div>
@@ -428,7 +430,7 @@ export default function OverviewPage({
               unbudgetedCategories.slice(0, 4).map((c) => (
                 <div className="legend-row" key={c.id}>
                   <CategorySwatch category={c.id} patternId={patternId} />
-                  <span className="legend-name">{tr(c.label)}</span>
+                  <span className="legend-name">{tr(c.labelKey)}</span>
                   <span className="legend-value">
                     {formatMoney(c.value, currency, language)}
                   </span>
@@ -438,19 +440,19 @@ export default function OverviewPage({
                 </div>
               ))
             ) : budgetProgress.length ? null : (
-              <p className="category-placeholder">{tr("Пока нет расходов")}</p>
+              <p className="category-placeholder">{tr("ui.noExpensesYet")}</p>
             )}
             {unbudgetedCategories.length > 4 && (
               <button
                 className="inline-link more-categories"
                 onClick={() => onTracker()}
               >
-                {tr("Ещё")} {unbudgetedCategories.length - 4}{" "}
+                {tr("ui.more")} {unbudgetedCategories.length - 4}{" "}
                 {plural(
                   unbudgetedCategories.length - 4,
-                  tr("категория"),
-                  tr("категории"),
-                  tr("категорий"),
+                  tr("ui.categoryAlternative"),
+                  tr("ui.categories"),
+                  tr("ui.categoriesAlternative"),
                   language,
                 )}{" "}
                 <ArrowRight size={14} />
@@ -464,12 +466,12 @@ export default function OverviewPage({
           <div className="panel-header">
             <div>
               <h2>
-                {tr("Последние расходы")}{" "}
+                {tr("ui.recentExpenses")}{" "}
                 <span className="count-badge">{transactions.length}</span>
               </h2>
             </div>
             <button className="section-link" onClick={onShowAll}>
-              {tr("Все расходы")} <ArrowRight size={16} />
+              {tr("ui.allExpenses")} <ArrowRight size={16} />
             </button>
           </div>
           {sortedTransactions.length ? (
@@ -489,13 +491,13 @@ export default function OverviewPage({
           <span className="budget-icon">
             <Wallet size={21} strokeWidth={1.6} />
           </span>
-          <h2>{tr("Месячный бюджет")}</h2>
+          <h2>{tr("ui.monthlyBudget")}</h2>
           {budget > 0 && (
             <>
               <div className="budget-values">
                 <strong>{Math.round(progress)}%</strong>
                 <span>
-                  {tr("от")} {formatMoney(budget, currency, language)}
+                  {tr("ui.of")} {formatMoney(budget, currency, language)}
                 </span>
               </div>
               <div
@@ -508,16 +510,16 @@ export default function OverviewPage({
               </div>
               <span className="budget-caption">
                 {progress === 100
-                  ? (language === 'en' ? 'Limit reached' : 'Лимит использован')
+                  ? (message(language, "ui.limitReached"))
                   : progress > 100
-                  ? `${tr("Лимит превышен на")} ${formatMoney(total - budget, currency, language)}`
-                  : `${tr("В запасе")} ${formatMoney(remaining, currency, language)}`}
+                  ? `${tr("ui.overBudgetBy")} ${formatMoney(total - budget, currency, language)}`
+                  : `${tr("ui.remaining")} ${formatMoney(remaining, currency, language)}`}
               </span>
               <BudgetState state={progress > 100 ? 'over' : progress >= 80 ? 'warning' : 'normal'} language={language} reached={progress === 100} />
             </>
           )}
           <button className="budget-link" onClick={() => onProfile()}>
-            {budget ? tr("Настроить бюджет") : tr("Установить бюджет")}
+            {budget ? tr("ui.adjustBudget") : tr("ui.setBudget")}
             <ArrowUpRight size={16} />
           </button>
           <div className="budget-art" aria-hidden="true">

@@ -1,3 +1,4 @@
+import { LocalizedError } from "../localizedError";
 import {
   STORAGE_KEY,
   MAX_BACKUP_LENGTH,
@@ -9,7 +10,7 @@ import {
   type Transaction,
 } from '../finance';
 import { isStreakLedger, mergeStreakLedgers } from '../streak/streakTypes';
-import { streakCopy } from '../streak/streakCopy';
+import { withCanonicalVersion } from '../appDataVersion';
 
 export { parseMoney } from '../finance';
 
@@ -32,23 +33,31 @@ export interface StoredData {
   raw?: string;
 }
 
-export class StorageRecoveryError extends Error {
+/** Metadata describes only the mutation attempt that actually reached storage. */
+export interface StoredOperationResult<R> {
+  data: AppData;
+  result: R;
+}
+
+export type StoredOperation<R> = (current: AppData) => StoredOperationResult<R>;
+
+export class StorageRecoveryError extends LocalizedError {
   constructor() {
-    super('Сохранённые данные повреждены. Исходная копия сохранена. Восстановите резервную копию или подтвердите сброс.');
+    super("ui.savedDataIsDamagedTheOriginalCopyIsPreservedRestoreABackupOrConfirmAReset");
     this.name = 'StorageRecoveryError';
   }
 }
 
-export class DataConflictError extends Error {
+export class DataConflictError extends LocalizedError {
   constructor() {
-    super('Данные изменились в другой вкладке. Обновите запись и повторите изменение.');
+    super("ui.dataChangedInAnotherTabLoadTheCurrentEntryAndTryAgain");
     this.name = 'DataConflictError';
   }
 }
 
 function browserStorage(storage?: StorageAdapter): StorageAdapter {
   const destination = storage ?? globalThis.localStorage;
-  if (!destination) throw new Error('Хранилище браузера недоступно.');
+  if (!destination) throw new LocalizedError("ui.browserStorageIsUnavailable");
   return destination;
 }
 
@@ -104,7 +113,7 @@ function writePrepared(
 ): void {
   // Object validation does not apply the string import limit. A saved payload
   // must also remain readable by the same validator after a browser restart.
-  if (serialized.length > MAX_BACKUP_LENGTH) throw new Error('Файл резервной копии слишком большой.');
+  if (serialized.length > MAX_BACKUP_LENGTH) throw new LocalizedError("ui.theBackupFileIsTooLarge");
   const raw = destination.getItem(STORAGE_KEY);
   if (expected && raw !== expected.raw) throw new StorageChangedError();
   const corrupt = raw !== null && !checkPrimary(destination, raw);
@@ -299,8 +308,8 @@ function retainRecordOrder<T extends { id: string }>(previous: T[], next: T[]): 
 function retainConfirmedDays(previous: AppData, candidate: AppData): AppData {
   if (previous.streak === undefined) return candidate;
   const streak = mergeStreakLedgers(previous.streak, candidate.streak);
-  if (!isStreakLedger(streak)) throw new Error(streakCopy.ru.invalidHistory);
-  return { ...candidate, version: candidate.profile.exchangeRates ? 4 : 3, streak };
+  if (!isStreakLedger(streak)) throw new LocalizedError("ui.theBackupContainsInvalidCheckInHistory");
+  return withCanonicalVersion({ ...candidate, streak });
 }
 
 /**
@@ -353,16 +362,18 @@ export function commitStoredData(
 }
 
 /**
- * Recompute a pure mutation against the latest primary on every retry. Use for
- * actions whose preconditions depend on the whole current collection, such as
- * template capacity and shopping-list deduplication, rather than stale editors.
+ * Recompute a pure operation against the latest primary on every retry. Return
+ * UI metadata with the candidate, instead of mutating an outer event/outcome:
+ * failed attempts and failed writes must never expose an uncommitted reward.
+ * Preconditions may depend on the whole current collection, such as template
+ * capacity and shopping-list deduplication, rather than a stale editor snapshot.
  */
-export function commitStoredMutation(
+export function commitStoredOperation<R>(
   base: AppData,
-  update: (current: AppData) => AppData,
+  operation: StoredOperation<R>,
   storage?: StorageAdapter,
   options: WriteOptions = {},
-): AppData {
+): StoredOperationResult<R> {
   const destination = browserStorage(storage);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const raw = destination.getItem(STORAGE_KEY);
@@ -370,7 +381,8 @@ export function commitStoredMutation(
     if ((stored.status === 'corrupt' || stored.status === 'recovered') && !options.replaceCorrupt) {
       throw new StorageRecoveryError();
     }
-    const desired = validateBackup(update(stored.data));
+    const attempt = operation(stored.data);
+    const desired = validateBackup(attempt.data);
     const candidate = options.replaceCorrupt ? desired : retainConfirmedDays(stored.data, desired);
     const next: AppData = {
       ...candidate,
@@ -387,12 +399,22 @@ export function commitStoredMutation(
     };
     try {
       writePrepared(JSON.stringify(next), destination, options, { raw });
-      return shareUnchanged(base, next);
+      return { data: shareUnchanged(base, next), result: attempt.result };
     } catch (cause) {
       if (!(cause instanceof StorageChangedError)) throw cause;
     }
   }
   throw new DataConflictError();
+}
+
+/** Compatibility wrapper for mutations that do not return transient UI metadata. */
+export function commitStoredMutation(
+  base: AppData,
+  update: (current: AppData) => AppData,
+  storage?: StorageAdapter,
+  options: WriteOptions = {},
+): AppData {
+  return commitStoredOperation(base, (current) => ({ data: update(current), result: undefined }), storage, options).data;
 }
 
 /** Merge a profile editor without copying or validating the expense history. */

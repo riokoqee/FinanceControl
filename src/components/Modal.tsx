@@ -94,7 +94,7 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        aria-label={label ?? tr("Управление расходами")}
+        aria-label={label ?? tr("ui.manageExpenses")}
         ref={ref}
       >
         {children}

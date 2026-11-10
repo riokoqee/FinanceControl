@@ -37,7 +37,9 @@ npm run build
 Remove-Item Env:GITHUB_PAGES
 ```
 
-The browser runner starts its own preview on port 5175. Set `BELILOG_URL` to use an existing preview or `CHROMIUM_PATH` to use an installed Chromium browser. The suites cover persistence, stale tabs, recovery, PDF import, shopping confirmation, budgets, templates, streaks, keyboard use, mobile layouts and contrast in both themes and languages.
+The browser runner starts its own preview on port 5175. Set `BELILOG_URL` to use an existing preview or `CHROMIUM_PATH` to use an installed Chromium browser. The suites cover persistence, stale tabs, recovery, PDF import, shopping confirmation, budgets, templates, streaks, hash navigation, profile flushes, safe undo, keyboard use, mobile layouts and contrast in both themes and languages.
+
+Version 2.9 separates domain actions from the application shell (107 lines in `App.tsx`), uses one dialog state and URL route, centralizes format versions and typed RU/EN keys, and returns operation metadata only after a successful storage commit. The suite contains 590 unit tests and 175 production browser scenarios, including neutral onboarding days, all-or-nothing freezes, profile navigation flushes and undo after editing a returned shopping item. Reconciliation reuses immutable transaction/ledger references within a local day; the 48-hour confirmation deadline is checked on every action.
 
 Release 2.8.0 passed 527 unit tests and 165 production browser scenarios, including 14 scenarios for manual rates and JSON/CSV/PDF portability. Ordinary and GitHub Pages builds passed. Three README screenshots use only demo data.
 
@@ -55,7 +57,7 @@ npx vitest bench src/lib/storage/storage.bench.ts --run
 
 | Location | Responsibility |
 | --- | --- |
-| `src/App.tsx` | Navigation, persistence integration and operations. |
+| `src/App.tsx` | Composition of route, data and domain controllers. |
 | `src/pages/` | Overview, tracker and profile, loaded on demand. |
 | `src/components/` | Forms, dialogs, shopping, charts and streak presentation. |
 | `src/components/AppDialogs.tsx`, `src/components/ExchangeRatesSettings.tsx` | App dialog composition and manual rate settings. |
@@ -65,7 +67,8 @@ npx vitest bench src/lib/storage/storage.bench.ts --run
 | `src/lib/pdf.ts` | Reports, embedded full backups and restore. |
 | `src/lib/streak/` | Confirmed days, freezes, recent days, copy and pirate ranks. |
 | `src/lib/shopping/` | Purchase-list operations and reusable shopping templates. |
-| `src/hooks/` | Persistence, profile drafts, shared calendar, purchases and data transfer. |
+| `src/hooks/` | Domain actions, a single dialog state, hash routing, profile drafts and data transfer. |
+| `src/lib/appDataVersion.ts`, `src/lib/messages.ts` | Canonical format versions and typed RU/EN message keys. |
 | `src/styles.css`, `src/motion.css` | Semantic themes, responsive layout and motion. |
 | `tests/` | Production browser regressions. |
 
@@ -110,6 +113,8 @@ Remove-Item Env:GITHUB_PAGES
 
 Браузерный сценарий сам запускает preview на порту 5175. Для готового preview задайте `BELILOG_URL`, для установленного Chromium — `CHROMIUM_PATH`. Проверяются сохранение, устаревшие вкладки, восстановление, PDF, подтверждение покупок, бюджеты, шаблоны, серии, клавиатура, мобильная вёрстка и контраст обеих тем на двух языках.
 
+В версии 2.9 операции вынесены из оболочки приложения (`App.tsx` — 107 строк). У диалогов единое состояние, маршрут берётся из URL; версии формата и типизированные ключи RU/EN централизованы. Результат операции возвращается только после успешной записи в хранилище. Набор содержит 590 модульных тестов и 175 браузерных сценариев: нейтральные дни до начала учёта, защита всего пропуска, сохранение профиля при навигации и отмена удаления после изменения возвращённого товара. Пересчёт переиспользует неизменяемые ссылки на расходы и историю в пределах местного дня; срок подтверждения 48 часов проверяется при каждом действии.
+
 Версия 2.8.0 прошла 527 модульных тестов и 165 браузерных сценариев производственной сборки, включая 14 сценариев ручных курсов и переноса JSON/CSV/PDF. Обычная сборка и сборка для GitHub Pages завершились успешно. На трёх скриншотах README показаны только демоданные.
 
 Отдельный микрозамер хранилища:
@@ -128,11 +133,17 @@ npx vitest bench src/lib/storage/storage.bench.ts --run
 
 
 ```text
-src/App.tsx                       навигация и интеграция операций
+src/App.tsx                       композиция контроллеров (107 строк)
 src/components/AppDialogs.tsx     общая композиция диалогов приложения
 src/components/ExchangeRatesSettings.tsx ручные курсы валют
 src/hooks/useDataTransfer.ts      PDF/JSON/CSV, импорт и резервные копии
-src/hooks/useShoppingActions.ts   операции списка покупок и шаблонов
+src/hooks/useShoppingActions.ts   операции списка покупок
+src/hooks/useShoppingTemplates.ts шаблоны
+src/hooks/useTransactions.ts      расходы и безопасная отмена удаления
+src/hooks/useTrackingActions.ts   подтверждение дней учёта
+src/hooks/useBackupRestore.ts     импорт, восстановление, демо и сброс
+src/hooks/useDialogState.ts       единое состояние открытого диалога
+src/hooks/useHashPage.ts          маршрут из URL и сохранение черновика
 src/lib/currency.ts               ручные и примерные курсы валют
 src/lib/dataExport.ts             JSON-копии, CSV и чтение файлов
 src/pages/                        обзор, трекер и профиль, загружаемые по запросу
@@ -156,7 +167,10 @@ src/lib/shopping/shopping.ts                связь списка с расх�
 src/lib/shopping/shopping.test.ts           проверки цен, сохранения, связей и старых копий
 src/lib/finance.ts                 типы, миграция, валидация, валюты
 src/lib/finance.test.ts            тесты хранения и расчётов
-src/lib/i18n.tsx                   словарь RU/EN и контекст языка
+src/lib/i18n.tsx                   контекст языка и типизированный перевод
+src/lib/messages.ts               ключи и словари RU/EN
+src/lib/localizedError.ts         локализованные ошибки по ключам
+src/lib/appDataVersion.ts         версии формата и выбор по данным
 src/lib/pdf.ts                     PDF, вложенная копия, восстановление
 src/lib/pdf.test.ts                проверки PDF и вложений
 src/lib/avatar.ts                  геометрия кадрирования и сохранение аватара

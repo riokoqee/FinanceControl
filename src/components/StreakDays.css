@@ -6,6 +6,7 @@
 .streak-day > strong { color: var(--text); font-size: 12px; line-height: 1.3; font-weight: 650; }
 .streak-day[data-status='LOGGED'] > svg, .streak-day[data-status='NO_SPEND'] > svg { color: var(--success); }
 .streak-day[data-status='FROZEN'] > svg { color: var(--text-muted); }
+.streak-day[data-status='NONE'] > svg, .streak-day[data-status='NONE'] > strong { color: var(--text-muted); }
 .streak-day:hover { background: var(--surface-hover); border-color: var(--control-border); }
 .streak-day[aria-pressed='true'] { border-color: var(--control-border); box-shadow: inset 0 -2px 0 var(--accent-text); }
 .streak-day[aria-current='date'] > span { color: var(--accent-text); font-weight: 750; }

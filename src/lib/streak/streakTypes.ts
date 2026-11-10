@@ -1,6 +1,7 @@
 /** A confirmed tracking day is independent of financial transactions. */
 export type ConfirmedDayStatus = 'LOGGED' | 'NO_SPEND';
-export type TrackingDayStatus = ConfirmedDayStatus | 'FROZEN' | 'MISSED' | 'PENDING';
+export type TrackingDayStatus = ConfirmedDayStatus | 'FROZEN' | 'MISSED' | 'PENDING' | 'NONE';
+export const STREAK_LEDGER_VERSION = 1;
 
 export interface ConfirmedTrackingDay {
   /** An immutable local calendar label; never converted through UTC. */
@@ -10,7 +11,7 @@ export interface ConfirmedTrackingDay {
 
 /** Only authoritative facts are persisted; freeze balances are always replayed. */
 export interface StreakLedger {
-  version: 1;
+  version: typeof STREAK_LEDGER_VERSION;
   /** Automatic protection begins here, without rewriting pre-migration gaps. */
   startedOn: string;
   confirmedDays: ConfirmedTrackingDay[];
@@ -30,7 +31,7 @@ export function isTrackingDate(value: unknown): value is string {
 export function isStreakLedger(value: unknown): value is StreakLedger {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const ledger = value as Partial<StreakLedger>;
-  if (ledger.version !== 1 || !isTrackingDate(ledger.startedOn)
+  if (ledger.version !== STREAK_LEDGER_VERSION || !isTrackingDate(ledger.startedOn)
     || !Array.isArray(ledger.confirmedDays) || ledger.confirmedDays.length > 100_000) return false;
   const seen = new Set<string>();
   for (const entry of ledger.confirmedDays) {
@@ -59,5 +60,5 @@ export function mergeStreakLedgers(
   if (startedOn === left.startedOn && confirmedDays.length === left.confirmedDays.length
     && confirmedDays.every((entry, index) => entry.date === left.confirmedDays[index].date
       && entry.status === left.confirmedDays[index].status)) return left;
-  return { version: 1, startedOn, confirmedDays };
+  return { version: left.version ?? STREAK_LEDGER_VERSION, startedOn, confirmedDays };
 }

@@ -1,5 +1,8 @@
+import type { MessageKey } from "../messages";
+import { LocalizedError } from "../localizedError";
 import {
   CURRENCIES,
+  MAX_SHOPPING_ITEMS,
   MAX_AMOUNT,
   MAX_TRANSACTIONS,
   getItemTotal,
@@ -10,18 +13,17 @@ import {
   type ShoppingItem,
 } from '../finance';
 
-const MAX_SHOPPING_ITEMS = 1_000;
 
-function readText(value: unknown, label: string, limit: number): string {
+function readText(value: unknown, label: MessageKey, limit: number): string {
   if (typeof value !== 'string' || value.length > limit || !value.trim()) {
-    throw new Error(`Некорректное поле «${label}».`);
+    throw new LocalizedError("ui.invalidFieldField", { field: { key: label } });
   }
   return value.trim();
 }
 
 function checkCurrency(currency: unknown): asserts currency is Currency {
   if (!CURRENCIES.some((entry) => entry.code === currency)) {
-    throw new Error('Выберите валюту USD, EUR или KZT.');
+    throw new LocalizedError("ui.chooseUsdEurOrKzt");
   }
 }
 
@@ -40,7 +42,7 @@ function priceInCents(amount: number): number {
     amount > MAX_AMOUNT ||
     cents / 100 !== amount
   ) {
-    throw new Error('Введите положительную цену до 1 000 000 000 000 с точностью до двух знаков.');
+    throw new LocalizedError("ui.enterAPositivePriceUpTo1000000000000WithUpToTwoDecimalPlaces");
   }
   return cents;
 }
@@ -52,22 +54,22 @@ export function parseShoppingPrice(input: string): number | null {
 
 function findItem(data: AppData, id: string): ShoppingItem {
   const item = data.shoppingList?.find((entry) => entry.id === id);
-  if (!item) throw new Error('Товар не найден в списке покупок.');
+  if (!item) throw new LocalizedError("ui.thisProductIsNoLongerInTheShoppingList");
   return item;
 }
 
 function normalizeItem(data: AppData, item: ShoppingItem): ShoppingItem {
-  const id = readText(item.id, 'ID товара', 128);
-  const title = readText(item.title, 'Название товара', 160);
+  const id = readText(item.id, "field.shoppingItemId", 128);
+  const title = readText(item.title, "field.shoppingItemTitle", 160);
   checkCurrency(item.currency);
-  if (!isValidDate(item.createdAt)) throw new Error('Некорректная дата создания товара.');
+  if (!isValidDate(item.createdAt)) throw new LocalizedError("ui.invalidShoppingItemCreationDate");
   const result: ShoppingItem = { id, title, currency: item.currency, createdAt: item.createdAt };
   if (item.transactionId !== undefined) {
-    const transactionId = readText(item.transactionId, 'ID связанного расхода', 128);
+    const transactionId = readText(item.transactionId, "field.linkedExpenseId", 128);
     const transaction = data.transactions.find((entry) => entry.id === transactionId);
     if (transaction) {
       if (data.shoppingList?.some((entry) => entry.id !== id && entry.transactionId === transactionId)) {
-        throw new Error('Этот расход уже связан с другим товаром.');
+        throw new LocalizedError("ui.thisExpenseIsAlreadyLinkedToAnotherShoppingItem");
       }
       result.transactionId = transactionId;
       result.title = transaction.title;
@@ -79,10 +81,10 @@ function normalizeItem(data: AppData, item: ShoppingItem): ShoppingItem {
 
 export function addShoppingItem(data: AppData, item: ShoppingItem): AppData {
   const list = data.shoppingList ?? [];
-  if (list.length >= MAX_SHOPPING_ITEMS) throw new Error('В списке покупок может быть не больше 1000 товаров.');
+  if (list.length >= MAX_SHOPPING_ITEMS) throw new LocalizedError("ui.theShoppingListCanContainUpTo1000Products");
   const normalized = normalizeItem(data, item);
   if (list.some((entry) => entry.id === normalized.id)) {
-    throw new Error('Товар с таким ID уже есть в списке покупок.');
+    throw new LocalizedError("ui.anItemWithThisIdIsAlreadyInTheShoppingList");
   }
   return { ...data, shoppingList: [...list, normalized] };
 }
@@ -95,7 +97,7 @@ export function updateShoppingItem(
   const current = normalizeItem(data, findItem(data, id));
   const updated = {
     ...current,
-    title: patch.title === undefined ? current.title : readText(patch.title, 'Название товара', 160),
+    title: patch.title === undefined ? current.title : readText(patch.title, "field.shoppingItemTitle", 160),
     currency: patch.currency === undefined ? current.currency : patch.currency,
   };
   checkCurrency(updated.currency);
@@ -141,7 +143,7 @@ export function saveShoppingPrice(
   let transactionId: string;
   if (existing) {
     if (cents < Math.round(getItemTotal(existing) * 100)) {
-      throw new Error('Цена не может быть меньше суммы покупок внутри расхода.');
+      throw new LocalizedError("ui.thePriceCannotBeLowerThanTheExpenseSItemTotal");
     }
     transactionId = existing.id;
     transactions = data.transactions.map((transaction) => transaction.id === existing.id
@@ -149,14 +151,14 @@ export function saveShoppingPrice(
       : transaction);
   } else {
     if (data.transactions.length >= MAX_TRANSACTIONS) {
-      throw new Error('Достигнут предел в 50 000 расходов.');
+      throw new LocalizedError("ui.theLimitOf50000ExpensesHasBeenReached");
     }
-    transactionId = readText(newTransactionId, 'ID расхода', 128);
+    transactionId = readText(newTransactionId, "field.expenseId", 128);
     if (data.transactions.some((transaction) => transaction.id === transactionId)) {
-      throw new Error('Расход с таким ID уже существует.');
+      throw new LocalizedError("ui.anExpenseWithThisIdAlreadyExists");
     }
     if (!(now instanceof Date) || !Number.isFinite(now.getTime()) || !isValidDate(todayString(now))) {
-      throw new Error('Некорректная дата создания расхода.');
+      throw new LocalizedError("ui.invalidExpenseCreationDate");
     }
     const today = todayString(now);
     transactions = [{

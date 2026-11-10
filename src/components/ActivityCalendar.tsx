@@ -1,3 +1,5 @@
+import type { MessageKey } from "../lib/messages";
+import { message } from "../lib/messages";
 import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import {
@@ -29,7 +31,7 @@ export default memo(function ActivityCalendar({
   language: Language;
   ledger?: StreakLedger;
 }) {
-  const tr = (text: string) => translate(language, text);
+  const tr = (text: MessageKey) => translate(language, text);
   const entryLabel = (count: number) => {
     if (language === "en") return count === 1 ? "record" : "records";
     const form = russianPlural.select(count);
@@ -158,13 +160,13 @@ export default memo(function ActivityCalendar({
     <section className="panel activity-panel">
       <div className="activity-header">
         <div>
-          <h2>{tr("Календарь активности")}</h2>
+          <h2>{tr("ui.activityCalendar")}</h2>
         </div>
         <div className="activity-year">
           <button
             type="button"
             className="icon-button"
-            aria-label={tr("Предыдущий год")}
+            aria-label={tr("ui.previousYear")}
             onClick={() => {
               setYear((y) => Math.max(1900, y - 1));
               setSelectedDay(null);
@@ -177,7 +179,7 @@ export default memo(function ActivityCalendar({
           <button
             type="button"
             className="icon-button"
-            aria-label={tr("Следующий год")}
+            aria-label={tr("ui.nextYear")}
             onClick={() => {
               setYear((y) => y + 1);
               setSelectedDay(null);
@@ -189,9 +191,7 @@ export default memo(function ActivityCalendar({
         </div>
       </div>
       <p id={keyboardHintId} className="sr-only">
-        {language === "en"
-          ? "Use Up and Down to move one day, Left and Right to move one week. Home and End move to the first and last day of the week; Control plus Home or End moves to the start or end of the year. Press Enter or Space to select a day."
-          : "Стрелки вверх и вниз перемещают на день, влево и вправо — на неделю. Home и End переходят к началу и концу недели; Control с Home или End — к началу или концу года. Нажмите Enter или пробел, чтобы выбрать день."}
+        {message(language, "ui.useUpAndDownToMoveOneDayLeftAndRightToMoveOneWeekHomeAndEndMoveToTheFirstAndLastDayOfTheWeekControlPlusHomeOrEndMovesToTheStartOrEndOfTheYearPressEnterOrSpaceToSelectADay")}
       </p>
       <div className="activity-scroll" ref={scrollRef}>
         <div
@@ -219,7 +219,7 @@ export default memo(function ActivityCalendar({
             <div
               className="activity-grid"
               role="group"
-              aria-label={tr("Активность по дням")}
+              aria-label={tr("ui.dailyActivity")}
               aria-describedby={keyboardHintId}
             >
               {weeks.map((week, index) => (
@@ -271,13 +271,13 @@ export default memo(function ActivityCalendar({
           {detailDate} · <strong>{detailCount}</strong>{" "}
           {entryLabel(detailCount)}
         </span>
-        <span>{tr("Меньше")}</span>
+        <span>{tr("ui.less")}</span>
         <span className="activity-scale" aria-hidden="true">
           {[0, 1, 2, 3, 4].map((level) => (
             <i className="activity-day" data-level={level} key={level} />
           ))}
         </span>
-        <span>{tr("Больше")}</span>
+        <span>{tr("ui.moreAlternative")}</span>
       </div>
       <div className="activity-stats">
         <div>
@@ -288,18 +288,16 @@ export default memo(function ActivityCalendar({
         <div>
           <CalendarDays size={16} />
           <strong>{activeDays}</strong>
-          <span>{tr("активных дней")}</span>
+          <span>{tr("ui.activeDays")}</span>
         </div>
         <div>
           <Flame size={16} />
           <strong>{longest}</strong>
-          <span>{plural(longest, tr("день"), tr("дня"), tr("дней"), language)} · {tr("Лучшая серия")}</span>
+          <span>{plural(longest, tr("ui.day"), tr("ui.days"), tr("ui.daysAlternative"), language)} · {tr("ui.bestStreak")}</span>
         </div>
       </div>
       <p className="activity-hint">
-        {language === "en"
-          ? "By date added; older records use the purchase date."
-          : "По дате добавления; старые записи — по дате покупки."}
+        {message(language, "ui.byDateAddedOlderRecordsUseThePurchaseDate")}
       </p>
     </section>
   );

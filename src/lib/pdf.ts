@@ -1,3 +1,4 @@
+import { LocalizedError } from "./localizedError";
 import fontkit from '@pdf-lib/fontkit';
 import {
   PDFArray,
@@ -105,7 +106,7 @@ const COPY = {
 async function loadFont(): Promise<ArrayBuffer> {
   const baseUrl = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
   const response = await fetch(`${baseUrl}fonts/report-font.ttf`);
-  if (!response.ok) throw new Error('Не удалось загрузить шрифт для PDF. Попробуйте ещё раз.');
+  if (!response.ok) throw new LocalizedError("ui.couldNotLoadThePdfFontPleaseTryAgain");
   return response.arrayBuffer();
 }
 
@@ -302,23 +303,23 @@ function attachmentName(value: unknown): string | undefined {
 
 /** Read only our named attachment; PDF scripts and page contents are never executed. */
 export async function readPdfBackup(bytes: Uint8Array): Promise<AppData> {
-  if (bytes.byteLength > MAX_PDF_SIZE) throw new Error('PDF слишком большой. Максимум — 40 МБ.');
+  if (bytes.byteLength > MAX_PDF_SIZE) throw new LocalizedError("ui.thePdfIsTooLargeTheLimitIs40Mb");
   if (new TextDecoder('ascii').decode(bytes.subarray(0, 5)) !== '%PDF-') {
-    throw new Error('Выберите PDF, сохранённый из BeliLog.');
+    throw new LocalizedError("ui.chooseAPdfSavedByBelilog");
   }
   let doc: PDFDocument;
   try {
     doc = await PDFDocument.load(bytes, { updateMetadata: false, throwOnInvalidObject: true });
   } catch {
-    throw new Error('Не удалось прочитать PDF. Выберите резервную копию BeliLog.');
+    throw new LocalizedError("ui.couldNotReadThePdfChooseABelilogBackup");
   }
   const names = doc.catalog.lookupMaybe(PDFName.of('Names'), PDFDict);
   const embeddedFiles = names?.lookupMaybe(PDFName.of('EmbeddedFiles'), PDFDict);
-  if (!embeddedFiles) throw new Error('В этом PDF нет резервной копии BeliLog.');
+  if (!embeddedFiles) throw new LocalizedError("ui.thisPdfDoesNotContainABelilogBackup");
   const visited = new Set<PDFDict>();
   // PDF name trees can use either a direct Names array or nested Kids dictionaries.
   function find(tree: PDFDict, depth = 0): PDFDict | undefined {
-    if (depth > 20 || visited.has(tree)) throw new Error('Некорректное дерево вложений PDF.');
+    if (depth > 20 || visited.has(tree)) throw new LocalizedError("ui.invalidPdfAttachmentTree");
     visited.add(tree);
     const entries = tree.lookupMaybe(PDFName.of('Names'), PDFArray);
     if (entries) {
@@ -340,14 +341,14 @@ export async function readPdfBackup(bytes: Uint8Array): Promise<AppData> {
   const unicodeStream = files ? doc.context.lookup(files.get(PDFName.of('UF'))) : undefined;
   const fallbackStream = files ? doc.context.lookup(files.get(PDFName.of('F'))) : undefined;
   const stream = unicodeStream instanceof PDFRawStream ? unicodeStream : fallbackStream;
-  if (!(stream instanceof PDFRawStream)) throw new Error('В этом PDF нет резервной копии BeliLog.');
+  if (!(stream instanceof PDFRawStream)) throw new LocalizedError("ui.thisPdfDoesNotContainABelilogBackup");
   let payload: Uint8Array;
   try {
     // Read a bounded amount instead of expanding an arbitrary attachment in full.
     payload = new Uint8Array(decodePDFRawStream(stream).getBytes(MAX_BACKUP_SIZE + 1));
   } catch {
-    throw new Error('Вложенная резервная копия PDF повреждена.');
+    throw new LocalizedError("ui.theBackupEmbeddedInThisPdfIsDamaged");
   }
-  if (payload.byteLength > MAX_BACKUP_SIZE) throw new Error('Вложенная резервная копия слишком большая.');
+  if (payload.byteLength > MAX_BACKUP_SIZE) throw new LocalizedError("ui.theEmbeddedBackupIsTooLarge");
   return validateBackup(new TextDecoder('utf-8', { fatal: true }).decode(payload));
 }

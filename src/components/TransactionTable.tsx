@@ -1,3 +1,5 @@
+import type { MessageKey } from "../lib/messages";
+import { message } from "../lib/messages";
 import { useEffect, useMemo, useState } from "react";
 import {
   Car,
@@ -80,7 +82,7 @@ export default function TransactionTable({
   pageSize = 50,
   paginationKey,
 }: TransactionTableProps) {
-  const tr = (text: string) => translate(language, text);
+  const tr = (text: MessageKey) => translate(language, text);
   const size = Math.max(1, Math.floor(pageSize) || 50);
   const filterKey = useMemo(() => paginationKey ?? items.map((item) => item.id).join("\u0000"), [paginationKey, items]);
   const [position, setPosition] = useState({ key: filterKey, page: 1 });
@@ -105,11 +107,11 @@ export default function TransactionTable({
         <table className="transaction-table">
           <thead>
             <tr>
-              <th>{tr("Название")}</th>
-              <th>{tr("Категория")}</th>
-              <th>{tr("Дата")}</th>
-              <th className="amount-cell">{tr("Сумма")}</th>
-              <th><span className="sr-only">{tr("Действия")}</span></th>
+              <th>{tr("ui.title")}</th>
+              <th>{tr("ui.category")}</th>
+              <th>{tr("ui.date")}</th>
+              <th className="amount-cell">{tr("ui.amount")}</th>
+              <th><span className="sr-only">{tr("ui.actions")}</span></th>
             </tr>
           </thead>
           <tbody>
@@ -120,7 +122,7 @@ export default function TransactionTable({
                     type="button"
                     className="transaction-open"
                     onClick={() => onOpen(transaction.id)}
-                    aria-label={`${tr("Открыть запись")}: ${transaction.title}`}
+                    aria-label={`${tr("ui.openRecord")}: ${transaction.title}`}
                   >
                     <CategoryIcon category={transaction.category} />
                     <div>
@@ -139,7 +141,7 @@ export default function TransactionTable({
                 </td>
                 <td>
                   <span className="category-badge">
-                    {tr(CATEGORIES.find((category) => category.id === transaction.category)?.label ?? "")}
+                    {tr(CATEGORIES.find((category) => category.id === transaction.category)?.labelKey ?? "category.other")}
                   </span>
                 </td>
                 <td className="text-muted date-cell">{formatDate(transaction.date, language)}</td>
@@ -152,15 +154,15 @@ export default function TransactionTable({
                       type="button"
                       className="icon-button"
                       onClick={() => onEdit(transaction)}
-                      aria-label={`${tr("Изменить")} ${transaction.title}`}
-                      title={tr("Изменить")}
+                      aria-label={`${tr("common.edit")} ${transaction.title}`}
+                      title={tr("common.edit")}
                     ><Pencil size={15} /></button>
                     <button
                       type="button"
                       className="icon-button delete-action"
                       onClick={() => onDelete(transaction)}
-                      aria-label={`${tr("Удалить")} ${transaction.title}`}
-                      title={tr("Удалить")}
+                      aria-label={`${tr("common.delete")} ${transaction.title}`}
+                      title={tr("common.delete")}
                     ><Trash2 size={15} /></button>
                   </div>
                 </td>
@@ -170,7 +172,7 @@ export default function TransactionTable({
         </table>
       </div>
       {!compact && (
-        <nav className="table-pagination" aria-label={language === "en" ? "Expense history pages" : "Страницы журнала расходов"}>
+        <nav className="table-pagination" aria-label={message(language, "ui.expenseHistoryPages")}>
           <span className="table-pagination-summary" role="status" aria-live="polite" aria-atomic="true">{summary}</span>
           {pages > 1 && (
             <div className="table-pagination-controls">
@@ -178,7 +180,7 @@ export default function TransactionTable({
                 type="button"
                 className="icon-button"
                 disabled={page === 1}
-                aria-label={language === "en" ? "Previous page" : "Предыдущая страница"}
+                aria-label={message(language, "ui.previousPage")}
                 onClick={() => setPosition({ key: filterKey, page: page - 1 })}
               ><ChevronLeft size={18} /></button>
               <span>{pageLabel}</span>
@@ -186,7 +188,7 @@ export default function TransactionTable({
                 type="button"
                 className="icon-button"
                 disabled={page === pages}
-                aria-label={language === "en" ? "Next page" : "Следующая страница"}
+                aria-label={message(language, "ui.nextPage")}
                 onClick={() => setPosition({ key: filterKey, page: page + 1 })}
               ><ChevronRight size={18} /></button>
             </div>

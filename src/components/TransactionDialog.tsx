@@ -74,7 +74,7 @@ export default function TransactionDialog({
           date < "1900-01-01" ||
           date > "2200-12-31"
         ) {
-          setError("Укажите название, корректную дату и сумму не меньше 0,01.");
+          setError(tr("ui.enterATitleAValidDateAndAnAmountOfAtLeast001"));
           return;
         }
         if (
@@ -82,7 +82,7 @@ export default function TransactionDialog({
           Math.round(getItemTotal(value) * 100) > Math.round(numeric * 100)
         ) {
           setError(
-            "Общая сумма меньше суммы покупок внутри записи. Сначала измените состав.",
+            tr("ui.theTotalIsLowerThanTheItemizedPurchasesUpdateTheItemsFirst"),
           );
           return;
         }
@@ -106,14 +106,14 @@ export default function TransactionDialog({
       <div className="dialog-header">
         <div>
           <h2>
-            {value ? tr("Изменить расход") : tr("Новый расход")}
+            {value ? tr("ui.editExpense") : tr("ui.newExpense")}
             <span className="heading-dot">.</span>
           </h2>
         </div>
         <button
           type="button"
           className="icon-button modal-close"
-          aria-label={tr("Закрыть")}
+          aria-label={tr("common.close")}
           onClick={onClose}
         >
           <X size={21} />
@@ -121,10 +121,10 @@ export default function TransactionDialog({
       </div>
       <div className="form-grid">
         <label className="field full-width">
-          <span className="field-label">{tr("На что потратили?")}</span>
+          <span className="field-label">{tr("ui.whatDidYouSpendOn")}</span>
           <input
             className="form-input"
-            placeholder={tr("Например, кофе и круассан")}
+            placeholder={tr("ui.forExampleCoffeeAndACroissant")}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
@@ -132,7 +132,7 @@ export default function TransactionDialog({
           />
         </label>
         <label className="field amount-field">
-          <span className="field-label">{tr("Сумма")}</span>
+          <span className="field-label">{tr("ui.amount")}</span>
           <input
             className="form-input amount-input"
             type="text"
@@ -145,7 +145,7 @@ export default function TransactionDialog({
           />
         </label>
         <label className="field">
-          <span className="field-label">{tr("Валюта")}</span>
+          <span className="field-label">{tr("ui.currency")}</span>
           <select
             className="form-input currency-input"
             value={currency}
@@ -159,7 +159,7 @@ export default function TransactionDialog({
           </select>
         </label>
         <fieldset className="field full-width category-fieldset">
-          <legend className="field-label">{tr("Категория")}</legend>
+          <legend className="field-label">{tr("ui.category")}</legend>
           <div className="category-picker">
             {CATEGORIES.map((c) => {
               const Icon = categoryIcons[c.id];
@@ -172,14 +172,14 @@ export default function TransactionDialog({
                   aria-pressed={category === c.id}
                 >
                   <Icon size={17} />
-                  <span>{tr(c.label)}</span>
+                  <span>{tr(c.labelKey)}</span>
                 </button>
               );
             })}
           </div>
         </fieldset>
         <label className="field full-width">
-          <span className="field-label">{tr("Дата покупки")}</span>
+          <span className="field-label">{tr("ui.purchaseDate")}</span>
           <input
             type="date"
             className="form-input"
@@ -192,7 +192,7 @@ export default function TransactionDialog({
         </label>
         <label className="field full-width">
           <span className="field-label">
-            {tr("Заметка")} <small>{tr("необязательно")}</small>
+            {tr("ui.note")} <small>{tr("ui.optional")}</small>
           </span>
           <textarea
             className="form-input"
@@ -205,17 +205,17 @@ export default function TransactionDialog({
       </div>
       {error && (
         <p className="form-error" role="alert">
-          {tr(error)}
+          {error}
         </p>
       )}
       {error && onReload && (
-        <Button onClick={onReload}>{tr("Загрузить актуальную запись")}</Button>
+        <Button onClick={onReload}>{tr("ui.loadCurrentEntry")}</Button>
       )}
       <div className="dialog-footer">
-        <Button onClick={onClose}>{tr("Отмена")}</Button>
+        <Button onClick={onClose}>{tr("common.cancel")}</Button>
         <Button variant="primary" type="submit">
           <Check size={17} />
-          {value ? tr("Сохранить") : tr("Добавить расход")}
+          {value ? tr("common.save") : tr("ui.addExpense")}
         </Button>
       </div>
     </form>

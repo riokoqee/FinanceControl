@@ -160,6 +160,27 @@ try {
     }, { data: original });
   }
 
+  await check('fresh onboarding shows neutral days before tracking and offers no backfill for them', async (page) => {
+    const original = await read(page);
+    assert.equal(await page.locator('.streak-day[data-status="NONE"]').count(), 6);
+    assert.equal(await page.locator('.streak-day[data-status="MISSED"]').count(), 0);
+    assert.equal(await dateCell(page, today).getAttribute('data-status'), 'PENDING');
+    await dateCell(page, day(-1)).click();
+    assert.match(await page.locator('.streak-day-detail-label').innerText(), /Before tracking/);
+    assert.equal(await page.locator('.streak-day-backfill button').count(), 0);
+    assert.deepEqual(await read(page), original, 'Viewing neutral history must not write an onboarding ledger');
+    await noOverflow(page);
+    await confirmToday(page);
+    assert.equal(await page.locator('.streak-day[data-status="NONE"]').count(), 6);
+    assert.equal(await region(page).getAttribute('data-streak'), '1');
+    assert.equal(await bounty(page), 500_000);
+    assert.deepEqual((await read(page)).transactions, []);
+    await navigate(page, 'profile');
+    await dateCell(page, day(-1)).click();
+    assert.equal(await dateCell(page, day(-1)).getAttribute('data-status'), 'NONE');
+    assert.equal(await page.locator('.streak-day-backfill button').count(), 0);
+  }, { width: 360 });
+
   await check('no-spend check-in persists without a fictional expense and agrees across profile, badge and poster', async (page) => {
     assert.equal(await page.locator('.bounty-poster').count(), 0);
     await confirmToday(page);
@@ -204,6 +225,20 @@ try {
     assert.equal(await bounty(page), 1_000_000);
   }, { data: seed({ version: 3, streak: ledger([{ date: day(-1), status: 'NO_SPEND' }]) }) });
 
+  await check('a backdated first purchase rewards its creation day while earlier days stay outside tracking', async (page) => {
+    await addExpense(page, 'First purchase entered later', day(-1));
+    const saved = await read(page);
+    assert.equal(saved.transactions.length, 1);
+    assert.equal(saved.transactions[0].date, day(-1));
+    assert.equal(saved.transactions[0].createdAt, today);
+    assert.deepEqual(saved.streak.confirmedDays, [{ date: today, status: 'LOGGED' }]);
+    assert.equal(await bounty(page), 500_000);
+    await dateCell(page, day(-1)).click();
+    assert.equal(await dateCell(page, day(-1)).getAttribute('data-status'), 'NONE');
+    assert.equal(await page.locator('.streak-day-backfill button').count(), 0);
+    assert.deepEqual(await read(page), saved);
+  });
+
   await check('the seventh check-in earns one freeze and midnight consumes it without new berries', async (page) => {
     await page.locator('.streak-no-spend').click();
     await until(async () => assert.equal(await region(page).getAttribute('data-freezes'), '1'));
@@ -219,6 +254,24 @@ try {
     assert.equal(await bounty(page), 3_500_000);
     assert.deepEqual((await read(page)).streak.confirmedDays, facts);
   }, { time: '2026-11-08T12:00:00+01:00', data: seed({ version: 3, streak: ledger(run(6, -2)) }) });
+
+  await check('an insufficient freeze reserve leaves the whole gap missed and is preserved for later use', async (page) => {
+    const original = await read(page);
+    assert.equal(await dateCell(page, day(-2)).getAttribute('data-status'), 'MISSED');
+    assert.equal(await dateCell(page, day(-1)).getAttribute('data-status'), 'MISSED');
+    assert.equal(await region(page).getAttribute('data-freezes'), '1');
+    assert.equal(await region(page).getAttribute('data-streak'), '0');
+    assert.equal(await page.locator('.bounty-poster').count(), 0);
+    assert.match(await page.locator('.streak-bounty-metrics > div').first().innerText(), /7/);
+    assert.deepEqual(await read(page), original);
+    await confirmPast(page, day(-1));
+    await until(async () => assert.equal(await dateCell(page, day(-1)).getAttribute('data-status'), 'NO_SPEND'));
+    assert.equal(await dateCell(page, day(-2)).getAttribute('data-status'), 'FROZEN');
+    assert.equal(await region(page).getAttribute('data-freezes'), '0');
+    assert.equal(await region(page).getAttribute('data-streak'), '8');
+    assert.equal(await bounty(page), 4_000_000);
+    assert.equal((await read(page)).streak.confirmedDays.length, 8);
+  }, { data: seed({ version: 3, streak: ledger(run(7, -3)) }) });
 
   await check('backfilling a frozen yesterday restores its freeze and awards only the confirmed day', async (page) => {
     assert.equal(await dateCell(page, day(-1)).getAttribute('data-status'), 'FROZEN');

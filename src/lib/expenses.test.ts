@@ -1,9 +1,108 @@
 import { describe, expect, it } from 'vitest';
-import { createDemoData, getMonthTransactions, getMonthTotal } from './finance';
-import type { Transaction } from './finance';
-import { filterExpenses, indexExpenseText, newestFirst, orderExpenses, summarizeExpenses } from './expenses';
+import { MAX_TRANSACTIONS, createDemoData, createEmptyData, getMonthTransactions, getMonthTotal, validateBackup } from './finance';
+import type { AppData, Transaction } from './finance';
+import { filterExpenses, indexExpenseText, newestFirst, orderExpenses, removeExpense, summarizeExpenses, undoExpense } from './expenses';
 
 const records = createDemoData(new Date(2026, 10, 6, 12)).transactions;
+
+describe('fresh expense deletion and conflict-safe undo', () => {
+  function fixture(): AppData {
+    return { ...createEmptyData(), transactions: [
+      { id: 'bread', title: 'Bread', amount: 3, currency: 'EUR', category: 'food', date: '2026-11-09',
+        createdAt: '2026-11-09', note: 'Fresh values', items: [{ id: 'loaf', title: 'Loaf', amount: 2 }] },
+      { id: 'other', title: 'Other', amount: 10, currency: 'USD', category: 'home', date: '2026-11-09' },
+    ], shoppingList: [
+      { id: 'linked', title: 'Bread', currency: 'EUR', createdAt: '2026-11-08', transactionId: 'bread' },
+      { id: 'unrelated', title: 'Tea', currency: 'USD', createdAt: '2026-11-09' },
+    ] };
+  }
+
+  it('captures the actual fresh deleted expense and preserves input identity for unrelated records', () => {
+    const original = fixture();
+    const fresh = { ...original, transactions: [{ ...original.transactions[0], amount: 5, note: 'Changed in another tab' }, original.transactions[1]] };
+    const before = structuredClone(fresh);
+    const removed = removeExpense(fresh, 'bread');
+    expect(removed.result.transaction).toBe(fresh.transactions[0]);
+    expect(removed.result.transaction?.amount).toBe(5);
+    expect(removed.data.transactions).toEqual([fresh.transactions[1]]);
+    expect(removed.data.transactions[0]).toBe(fresh.transactions[1]);
+    expect(removed.result.pendingSnapshots).toEqual([{ id: 'linked', title: 'Bread', currency: 'EUR', createdAt: '2026-11-08' }]);
+    expect(removed.data.shoppingList?.[1]).toBe(fresh.shoppingList?.[1]);
+    expect(fresh).toEqual(before);
+  });
+
+  it('restores the full actual expense and reconnects an untouched planned row once', () => {
+    const original = fixture();
+    const removed = removeExpense(original, 'bread');
+    const restored = undoExpense(removed.data, removed.result);
+    expect(restored.transactions.find((record) => record.id === 'bread')).toBe(original.transactions[0]);
+    expect(restored.shoppingList).toEqual(original.shoppingList);
+    expect(validateBackup(restored).shoppingList).toEqual(original.shoppingList);
+    expect(undoExpense(restored, removed.result)).toBe(restored);
+  });
+
+  it.each([
+    { title: 'Milk' }, { currency: 'KZT' as const }, { createdAt: '2026-11-10' },
+    { title: 'Milk', currency: 'KZT' as const },
+  ])('keeps a planned row edited after deletion without silently restoring its old fields: %j', (patch) => {
+    const removed = removeExpense(fixture(), 'bread');
+    const changed = { ...removed.data, shoppingList: removed.data.shoppingList!.map((item) => item.id === 'linked' ? { ...item, ...patch } : item) };
+    const expected = structuredClone(changed.shoppingList);
+    const restored = undoExpense(changed, removed.result);
+    expect(restored.transactions.some((record) => record.id === 'bread')).toBe(true);
+    expect(restored.shoppingList).toEqual(expected);
+    expect(restored.shoppingList?.[0].transactionId).toBeUndefined();
+    expect(validateBackup(restored).shoppingList).toEqual(expected);
+  });
+
+  it('does not adopt a foreign purchase link or any new unrelated pending plan', () => {
+    const removed = removeExpense(fixture(), 'bread');
+    const changed: AppData = { ...removed.data, shoppingList: [
+      { ...removed.data.shoppingList![0], transactionId: 'other', title: 'Other', currency: 'USD' },
+      ...removed.data.shoppingList!.slice(1),
+      { id: 'new-plan', title: 'Milk', currency: 'KZT', createdAt: '2026-11-09' },
+    ] };
+    const expected = structuredClone(changed.shoppingList);
+    expect(undoExpense(changed, removed.result).shoppingList).toEqual(expected);
+  });
+
+  it('keeps concurrent deletions and never recreates a removed shopping row', () => {
+    const removed = removeExpense(fixture(), 'bread');
+    const changed = { ...removed.data, transactions: [], shoppingList: removed.data.shoppingList!.filter((item) => item.id !== 'linked') };
+    const restored = undoExpense(changed, removed.result);
+    expect(restored.transactions.map((record) => record.id)).toEqual(['bread']);
+    expect(restored.shoppingList).toEqual(changed.shoppingList);
+    expect(removeExpense(changed, 'bread')).toEqual({ data: changed, result: { pendingSnapshots: [] } });
+    expect(removeExpense(changed, 'bread').data).toBe(changed);
+  });
+
+  it('preserves an expense recreated under the same ID and leaves its old plan unlinked', () => {
+    const removed = removeExpense(fixture(), 'bread');
+    const recreated: Transaction = { ...removed.result.transaction!, title: 'New expense', amount: 100, currency: 'USD' };
+    const changed = { ...removed.data, transactions: [...removed.data.transactions, recreated] };
+    expect(undoExpense(changed, removed.result)).toBe(changed);
+    expect(changed.transactions.at(-1)).toBe(recreated);
+    expect(changed.shoppingList?.[0].transactionId).toBeUndefined();
+  });
+
+  it('handles ledgers without shopping fields without adding optional records', () => {
+    const { shoppingList: _plans, ...original } = fixture();
+    const removed = removeExpense(original, 'bread');
+    expect(Object.hasOwn(removed.data, 'shoppingList')).toBe(false);
+    expect(Object.hasOwn(undoExpense(removed.data, removed.result), 'shoppingList')).toBe(false);
+    expect(undoExpense(original, { pendingSnapshots: [] })).toBe(original);
+  });
+
+  it('rejects undo at the transaction capacity atomically', () => {
+    const removed = removeExpense(fixture(), 'bread');
+    const full = { ...removed.data, transactions: Array.from({ length: MAX_TRANSACTIONS }, (_, index) => ({ ...removed.data.transactions[0], id: `full-${index}` })) };
+    const before = structuredClone(full.shoppingList);
+    expect(() => undoExpense(full, removed.result)).toThrow(/50/);
+    expect(full.transactions).toHaveLength(MAX_TRANSACTIONS);
+    expect(full.shoppingList).toEqual(before);
+  });
+});
+
 describe('expense view calculations', () => {
   it('uses saved rates consistently for both months, categories and amount sorting', () => {
     const rates = { USD: 1 as const, EUR: 0.5, KZT: 500 };

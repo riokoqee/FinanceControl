@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Transaction } from '../finance';
 import { getStreakStats } from './streak';
 import {
-  canConfirmTrackingDay, confirmNoSpend, confirmTrackingDay,
+  canConfirmTrackingDay, confirmDay, confirmNoSpend, confirmTrackingDay,
   getTrackingDays, getTrackingStats, reconcileStreak,
 } from './streakLedger';
-import { isStreakLedger, isTrackingDate, mergeStreakLedgers } from './streakTypes';
+import { isStreakLedger, isTrackingDate, mergeStreakLedgers, STREAK_LEDGER_VERSION } from './streakTypes';
 import type { ConfirmedDayStatus, StreakLedger } from './streakTypes';
 
 function at(day: string, time = '12:00:00'): Date {
@@ -148,15 +148,25 @@ describe('tracking-day ledger and automatic freezes', () => {
     expect(getTrackingDays([], state, at('2026-11-05')).find((day) => day.date === '2026-11-04')?.status).toBe('MISSED');
   });
 
-  it('handles two consecutive missed days with one freeze in chronological order', () => {
+  it('keeps its freeze when it cannot protect the entire closed two-day gap', () => {
     const state = ledger();
     expect(getTrackingDays([], state, at('2026-11-10')).filter((day) => day.date >= '2026-11-08'))
       .toEqual([
-        { date: '2026-11-08', status: 'FROZEN', canConfirm: true },
-        { date: '2026-11-09', status: 'MISSED', canConfirm: true },
-        { date: '2026-11-10', status: 'PENDING', canConfirm: true },
+        { date: '2026-11-08', status: 'MISSED', canConfirm: true, confirmationStatus: 'NO_SPEND' },
+        { date: '2026-11-09', status: 'MISSED', canConfirm: true, confirmationStatus: 'NO_SPEND' },
+        { date: '2026-11-10', status: 'PENDING', canConfirm: true, confirmationStatus: 'NO_SPEND' },
       ]);
-    expect(getTrackingStats([], state, at('2026-11-10'))).toMatchObject({ current: 0, longest: 7, freezes: 0 });
+    expect(getTrackingStats([], state, at('2026-11-10'))).toMatchObject({ current: 0, longest: 7, freezes: 1, bounty: 0 });
+    expect(getTrackingDays([], state, at('2026-11-10')).some((day) => day.status === 'FROZEN')).toBe(false);
+  });
+
+  it('protects a whole two-day gap when both freezes are available, without awarding days', () => {
+    const state = ledger(14);
+    expect(getTrackingStats([], state, at('2026-11-17'))).toMatchObject({
+      current: 14, longest: 14, freezes: 0, bounty: 7_000_000, confirmedDays: 14, freezeProgress: 0,
+    });
+    expect(getTrackingDays([], state, at('2026-11-17')).filter((day) => day.status === 'FROZEN').map((day) => day.date))
+      .toEqual(['2026-11-15', '2026-11-16']);
   });
 
   it('does not waste remaining inventory once a run has already ended', () => {
@@ -165,8 +175,8 @@ describe('tracking-day ledger and automatic freezes', () => {
       { date: '2026-12-01', status: 'LOGGED' as const },
     ] };
     const stats = getTrackingStats([], state, at('2026-12-02'));
-    expect(stats).toMatchObject({ current: 1, longest: 14, freezes: 0, confirmedDays: 15 });
-    expect(getTrackingDays([], state, at('2026-12-02'), 30).filter((day) => day.status === 'FROZEN')).toHaveLength(2);
+    expect(stats).toMatchObject({ current: 1, longest: 14, freezes: 2, confirmedDays: 15 });
+    expect(getTrackingDays([], state, at('2026-12-02'), 30).filter((day) => day.status === 'FROZEN')).toHaveLength(0);
   });
 
   it('backfills yesterday from frozen and refunds protection through replay', () => {
@@ -242,7 +252,7 @@ describe('tracking-day ledger and automatic freezes', () => {
   it('handles a long absence without storing every missing day or mutating facts', () => {
     const state = ledger(14);
     const before = JSON.stringify(state);
-    expect(getTrackingStats([], state, at('2076-11-05'))).toMatchObject({ current: 0, longest: 14, freezes: 0 });
+    expect(getTrackingStats([], state, at('2076-11-05'))).toMatchObject({ current: 0, longest: 14, freezes: 2 });
     expect(getTrackingDays([], state, at('2076-11-05'))).toHaveLength(7);
     expect(JSON.stringify(state)).toBe(before);
   });
@@ -294,6 +304,201 @@ describe('tracking-day ledger and automatic freezes', () => {
     expect(getTrackingDays([], ledger(), at('2026-11-09'), 0)).toEqual([]);
     expect(getTrackingDays([], ledger(), at('2026-11-09'), 100_000)).toHaveLength(366);
     expect(getTrackingDays([], ledger(), at('2026-11-09'), Number.NaN)).toHaveLength(7);
+  });
+});
+
+describe('tracking start and domain-owned confirmations', () => {
+  it('shows neutral NONE before onboarding and leaves today pending', () => {
+    const records: Transaction[] = [];
+    const now = at('2026-11-09');
+    const view = getTrackingDays(records, undefined, now);
+    expect(view.slice(0, -1).every((day) => day.status === 'NONE' && !day.canConfirm)).toBe(true);
+    expect(view.at(-1)).toEqual({ date: '2026-11-09', status: 'PENDING', canConfirm: true, confirmationStatus: 'NO_SPEND' });
+    const result = confirmDay(records, undefined, '2026-11-08', now);
+    expect(result.status).toBe('unavailable');
+    expect(result.ledger.confirmedDays).toEqual([]);
+  });
+
+  it('uses the earliest historical confirmation as the start, preserving migrated history', () => {
+    const state: StreakLedger = { version: STREAK_LEDGER_VERSION, startedOn: '2026-11-09',
+      confirmedDays: [{ date: '2026-11-07', status: 'LOGGED' }] };
+    const view = getTrackingDays([], state, at('2026-11-09'));
+    expect(view.filter((day) => day.date < '2026-11-07').every((day) => day.status === 'NONE' && !day.canConfirm)).toBe(true);
+    expect(view.find((day) => day.date === '2026-11-07')?.status).toBe('LOGGED');
+    expect(view.find((day) => day.date === '2026-11-08')).toMatchObject({ status: 'MISSED', canConfirm: true });
+    expect(getTrackingStats([], state, at('2026-11-09'))).toMatchObject({ current: 0, longest: 1, confirmedDays: 1 });
+  });
+
+  it('uses startedOn without historical confirmations and keeps today open after a clock rollback', () => {
+    const state: StreakLedger = { version: STREAK_LEDGER_VERSION, startedOn: '2026-11-07', confirmedDays: [] };
+    const view = getTrackingDays([], state, at('2026-11-09'));
+    expect(view.find((day) => day.date === '2026-11-06')?.status).toBe('NONE');
+    expect(view.find((day) => day.date === '2026-11-07')?.status).toBe('MISSED');
+    const rollback = getTrackingDays([], { ...state, startedOn: '2026-11-10' }, at('2026-11-09'));
+    expect(rollback.at(-1)).toMatchObject({ status: 'PENDING', canConfirm: true });
+  });
+
+  it('returns saved then already without duplicating a no-spend reward', () => {
+    const records: Transaction[] = [];
+    const now = at('2026-11-09');
+    const first = confirmDay(records, undefined, '2026-11-09', now);
+    expect(first).toMatchObject({ status: 'saved', dayStatus: 'NO_SPEND' });
+    expect(first.ledger.version).toBe(STREAK_LEDGER_VERSION);
+    const repeated = confirmDay(records, first.ledger, '2026-11-09', now);
+    expect(repeated).toEqual({ status: 'already', dayStatus: 'NO_SPEND', ledger: first.ledger });
+    expect(repeated.ledger).toBe(first.ledger);
+    expect(getTrackingStats(records, repeated.ledger, now)).toMatchObject({ confirmedDays: 1, bounty: 500_000 });
+    expect(records).toEqual([]);
+  });
+
+  it('distinguishes expired and unavailable days without inventing confirmations', () => {
+    const records: Transaction[] = [];
+    const state = ledger(1);
+    const now = at('2026-11-09');
+    expect(confirmDay(records, state, '2026-11-05', now)).toEqual({ status: 'expired', ledger: state });
+    for (const date of ['2026-10-31', '2026-11-10', '2026-02-30', 'bad']) {
+      expect(confirmDay(records, state, date, now)).toEqual({ status: 'unavailable', ledger: state });
+    }
+    expect(confirmDay(records, state, '2026-11-01', now)).toEqual({ status: 'already', dayStatus: 'LOGGED', ledger: state });
+    expect(state.confirmedDays).toHaveLength(1);
+  });
+
+  it('derives LOGGED from an earlier purchase whose creation date is different', () => {
+    const now = at('2026-11-09');
+    const transaction = expense('2026-11-08', '2026-11-09');
+    const records = [transaction];
+    const state: StreakLedger = { version: STREAK_LEDGER_VERSION, startedOn: '2026-11-07', confirmedDays: [] };
+    const result = confirmDay(records, state, '2026-11-08', now);
+    expect(result).toMatchObject({ status: 'saved', dayStatus: 'LOGGED' });
+    expect(result.ledger.confirmedDays).toEqual([
+      { date: '2026-11-08', status: 'LOGGED' }, { date: '2026-11-09', status: 'LOGGED' },
+    ]);
+    expect(getTrackingDays(records, state, now).find((day) => day.date === '2026-11-08'))
+      .toMatchObject({ canConfirm: true, confirmationStatus: 'LOGGED' });
+    expect(getTrackingStats(records, result.ledger, now)).toMatchObject({ confirmedDays: 2, bounty: 1_000_000 });
+    expect(records).toEqual([transaction]);
+  });
+
+  it('never labels an actual earlier purchase NO_SPEND through the compatibility wrapper', () => {
+    const now = at('2026-11-09');
+    const records = [expense('2026-11-08', '2026-11-09')];
+    const state: StreakLedger = { version: STREAK_LEDGER_VERSION, startedOn: '2026-11-07', confirmedDays: [] };
+    const result = confirmNoSpend(records, state, '2026-11-08', now);
+    expect(result.confirmedDays.find((entry) => entry.date === '2026-11-08')?.status).toBe('LOGGED');
+  });
+
+  it('upgrades a previously counted no-spend purchase day without awarding it again', () => {
+    const now = at('2026-11-09');
+    const state: StreakLedger = { version: STREAK_LEDGER_VERSION, startedOn: '2026-11-08',
+      confirmedDays: [{ date: '2026-11-08', status: 'NO_SPEND' }] };
+    const records = [expense('2026-11-08', '2026-11-09')];
+    const result = confirmDay(records, state, '2026-11-08', now);
+    expect(result).toMatchObject({ status: 'already', dayStatus: 'LOGGED' });
+    expect(result.ledger.confirmedDays).toHaveLength(2);
+    expect(getTrackingStats(records, result.ledger, now)).toMatchObject({ confirmedDays: 2, bounty: 1_000_000 });
+    expect(state.confirmedDays).toEqual([{ date: '2026-11-08', status: 'NO_SPEND' }]);
+  });
+
+  it('does not invent past tracking credit from a backdated purchase before onboarding', () => {
+    const records = [expense('2026-11-08', '2026-11-09')];
+    const result = confirmDay(records, undefined, '2026-11-08', at('2026-11-09'));
+    expect(result.status).toBe('unavailable');
+    expect(result.ledger.confirmedDays).toEqual([{ date: '2026-11-09', status: 'LOGGED' }]);
+    expect(getTrackingStats(records, result.ledger, at('2026-11-09')).bounty).toBe(500_000);
+  });
+});
+
+describe('bounded immutable reconciliation and replay caches', () => {
+  it('scans 50,000 records once across repeated stats, calendar and reconciliation reads', () => {
+    let dateReads = 0, createdReads = 0;
+    const records = Array.from({ length: 50_000 }, (_, index) => new Proxy({ ...expense('2026-11-09'), id: String(index) }, {
+      get(target, key, receiver) {
+        if (key === 'date') dateReads++;
+        if (key === 'createdAt') createdReads++;
+        return Reflect.get(target, key, receiver);
+      },
+    }));
+    const state = ledger();
+    const now = at('2026-11-09');
+    const first = getTrackingStats(records, state, now);
+    const normalized = reconcileStreak(records, state, now);
+    expect(dateReads).toBe(50_000);
+    expect(createdReads).toBe(50_000);
+    for (let index = 0; index < 10; index++) {
+      expect(getTrackingStats(records, state, now)).toBe(first);
+      expect(getTrackingStats(records, normalized, now)).toBe(first);
+      expect(reconcileStreak(records, normalized, now)).toBe(normalized);
+      expect(getTrackingDays(records, normalized, now)).toHaveLength(7);
+    }
+    expect(dateReads).toBe(50_000);
+    expect(createdReads).toBe(50_000);
+    expect(first).toMatchObject({ current: 8, confirmedDays: 8, bounty: 4_000_000 });
+  });
+
+  it('invalidates for transaction references, ledger references and the local calendar day', () => {
+    let reads = 0;
+    const transaction = new Proxy(expense('2026-11-09'), {
+      get(target, key, receiver) { if (key === 'createdAt') reads++; return Reflect.get(target, key, receiver); },
+    });
+    const records = [transaction];
+    const state: StreakLedger = { version: STREAK_LEDGER_VERSION, startedOn: '2026-11-09', confirmedDays: [] };
+    const now = at('2026-11-09');
+    getTrackingStats(records, state, now);
+    getTrackingStats(records, state, at('2026-11-09', '23:59:59'));
+    expect(reads).toBe(1);
+    getTrackingStats([...records], state, now);
+    expect(reads).toBe(2);
+    getTrackingStats(records, { ...state }, now);
+    expect(reads).toBe(3);
+    getTrackingStats(records, state, at('2026-11-10', '00:00:00'));
+    expect(reads).toBe(4);
+    const updated = getTrackingStats([...records, expense('2026-11-10')], state, at('2026-11-10'));
+    expect(reads).toBe(5);
+    expect(updated).toMatchObject({ current: 2, confirmedDays: 2 });
+  });
+
+  it('keeps only the latest ledger variant per transaction array without sharing stale stats', () => {
+    let reads = 0;
+    const records = [new Proxy(expense('2026-11-09'), {
+      get(target, key, receiver) { if (key === 'createdAt') reads++; return Reflect.get(target, key, receiver); },
+    })];
+    const first: StreakLedger = { version: STREAK_LEDGER_VERSION, startedOn: '2026-11-08',
+      confirmedDays: [{ date: '2026-11-09', status: 'LOGGED' }] };
+    const second: StreakLedger = { ...first, confirmedDays: [
+      { date: '2026-11-08', status: 'NO_SPEND' }, ...first.confirmedDays,
+    ] };
+    expect(getTrackingStats(records, first, at('2026-11-09')).current).toBe(1);
+    expect(getTrackingStats(records, second, at('2026-11-09')).current).toBe(2);
+    expect(getTrackingStats(records, first, at('2026-11-09')).current).toBe(1);
+    expect(reads).toBe(3);
+  });
+
+  it('invalidates on timezone day changes but never moves saved date labels', () => {
+    let reads = 0;
+    const records = [new Proxy(expense('2026-11-09'), {
+      get(target, key, receiver) { if (key === 'createdAt') reads++; return Reflect.get(target, key, receiver); },
+    })];
+    const state: StreakLedger = { version: STREAK_LEDGER_VERSION, startedOn: '2026-11-09',
+      confirmedDays: [{ date: '2026-11-09', status: 'LOGGED' }] };
+    const instant = new Date('2026-11-09T23:30:00Z');
+    process.env.TZ = 'America/Los_Angeles';
+    expect(getTrackingStats(records, state, instant).activeToday).toBe(true);
+    process.env.TZ = 'Asia/Tokyo';
+    expect(getTrackingStats(records, state, instant).activeToday).toBe(false);
+    process.env.TZ = 'America/Los_Angeles';
+    expect(getTrackingStats(records, state, instant).activeToday).toBe(true);
+    expect(reads).toBe(3);
+    expect(state.confirmedDays[0].date).toBe('2026-11-09');
+  });
+
+  it('rechecks precise backfill expiry even when the cached local day has not changed', () => {
+    const records: Transaction[] = [];
+    const state = ledger();
+    const before = getTrackingDays(records, state, at('2026-11-11', '00:00:00'));
+    const after = getTrackingDays(records, state, at('2026-11-11', '00:00:01'));
+    expect(before.find((day) => day.date === '2026-11-08')?.canConfirm).toBe(true);
+    expect(after.find((day) => day.date === '2026-11-08')?.canConfirm).toBe(false);
+    expect(confirmDay(records, state, '2026-11-08', at('2026-11-11', '00:00:01')).status).toBe('expired');
   });
 });
 

@@ -1,11 +1,17 @@
+import type { MessageKey } from "../lib/messages";
+import { message } from "../lib/messages";
+import type { DataOperation } from "./appTypes";
 import type { AppData, Currency, Language, Transaction } from "../lib/finance";
 import { todayString } from "../lib/finance";
 import type { ShoppingPurchaseConfirmation } from "../components/ShoppingList";
 import type { BountyCelebration } from "../components/StreakBounty";
 import { DataConflictError } from "../lib/storage/storage";
 import {
-  addShoppingItem, confirmShoppingPurchase, removeShoppingItem,
-  saveShoppingPrice, updateShoppingItem,
+  addShoppingItem,
+  confirmShoppingPurchase,
+  removeShoppingItem,
+  saveShoppingPrice,
+  updateShoppingItem,
 } from "../lib/shopping/shopping";
 import { getTrackingStats } from "../lib/streak/streakLedger";
 import { getStreakIncrease } from "../lib/streak/pirateRanks";
@@ -15,22 +21,36 @@ import { createRecordId } from "../lib/recordId";
 type ShoppingPage = "overview" | "tracker" | "shopping" | "profile";
 
 interface ShoppingActionsOptions {
-  mutateData: (change: (current: AppData) => AppData) => AppData | null;
+  operateData: DataOperation;
   page: ShoppingPage;
   language: Language;
-  setToast: (toast: { message: string; error?: boolean; undo?: () => void; pirate?: boolean }) => void;
-  setBountyCelebration: (celebration: (BountyCelebration & { page: ShoppingPage }) | null) => void;
+  setToast: (toast: {
+    message: string;
+    error?: boolean;
+    undo?: () => void;
+    pirate?: boolean;
+  }) => void;
+  setBountyCelebration: (
+    celebration: (BountyCelebration & { page: ShoppingPage }) | null,
+  ) => void;
 }
 
 /** Shopping mutations always recompute against current storage before feedback. */
 export function useShoppingActions({
-  mutateData, page, language, setToast, setBountyCelebration,
+  operateData,
+  page,
+  language,
+  setToast,
+  setBountyCelebration,
 }: ShoppingActionsOptions) {
-  const tr = (text: string) => translate(language, text);
+  const tr = (text: MessageKey) => translate(language, text);
   function commitShoppingChange(
     change: (current: AppData) => AppData,
   ): AppData | null {
-    return mutateData(change);
+    return (
+      operateData((current) => ({ data: change(current), result: undefined }))
+        ?.data ?? null
+    );
   }
   function addPlannedItem(title: string, itemCurrency: Currency): boolean {
     return Boolean(
@@ -82,9 +102,7 @@ export function useShoppingActions({
     changed?: { amount?: number; currency?: Currency },
   ): boolean {
     const eventId = createRecordId();
-    const event: { increase: ReturnType<typeof getStreakIncrease> } = { increase: null };
-    const next = commitShoppingChange((current) => {
-      event.increase = null;
+    const next = operateData((current) => {
       const now = new Date();
       checkShoppingBase(
         current,
@@ -108,14 +126,17 @@ export function useShoppingActions({
         eventId,
         now,
       );
-      if (desired.transactions.length > current.transactions.length) event.increase = getStreakIncrease(
-        getTrackingStats(current.transactions, current.streak, now),
-        getTrackingStats(desired.transactions, current.streak, now),
-      );
-      return desired;
+      const increase =
+        desired.transactions.length > current.transactions.length
+          ? getStreakIncrease(
+              getTrackingStats(current.transactions, current.streak, now),
+              getTrackingStats(desired.transactions, current.streak, now),
+            )
+          : null;
+      return { data: desired, result: increase };
     });
     if (!next) return false;
-    const increase = event.increase;
+    const increase = next.result;
     setBountyCelebration(
       increase
         ? { ...increase, id: eventId, expiresAt: Date.now() + 6000, page }
@@ -123,7 +144,7 @@ export function useShoppingActions({
     );
     if (increase?.promoted) {
       setToast({
-        message: `${language === "en" ? "New pirate rank" : "Новый пиратский ранг"}: ${increase.rank.name[language]}!`,
+        message: `${message(language, "streak.newRank")}: ${increase.rank.name[language]}!`,
         pirate: true,
       });
     }
@@ -139,9 +160,7 @@ export function useShoppingActions({
     purchase: ShoppingPurchaseConfirmation,
   ): boolean {
     const eventId = createRecordId();
-    const event: { increase: ReturnType<typeof getStreakIncrease> } = { increase: null };
-    const next = commitShoppingChange((current) => {
-      event.increase = null;
+    const next = operateData((current) => {
       const now = new Date();
       checkShoppingBase(current, id, purchase.base, purchase.changed);
       const row = current.shoppingList?.find((item) => item.id === id);
@@ -163,14 +182,17 @@ export function useShoppingActions({
           ? undefined
           : { title: purchase.title },
       );
-      if (desired.transactions.length > current.transactions.length) event.increase = getStreakIncrease(
-        getTrackingStats(current.transactions, current.streak, now),
-        getTrackingStats(desired.transactions, current.streak, now),
-      );
-      return desired;
+      const increase =
+        desired.transactions.length > current.transactions.length
+          ? getStreakIncrease(
+              getTrackingStats(current.transactions, current.streak, now),
+              getTrackingStats(desired.transactions, current.streak, now),
+            )
+          : null;
+      return { data: desired, result: increase };
     });
     if (!next) return false;
-    const increase = event.increase;
+    const increase = next.result;
     setBountyCelebration(
       increase
         ? { ...increase, id: eventId, expiresAt: Date.now() + 6000, page }
@@ -178,8 +200,8 @@ export function useShoppingActions({
     );
     setToast({
       message: increase?.promoted
-        ? `${tr("Покупка подтверждена. Расход сохранён.")} ${language === "en" ? "New pirate rank" : "Новый пиратский ранг"}: ${increase.rank.name[language]}!`
-        : tr("Покупка подтверждена. Расход сохранён."),
+        ? `${tr("ui.purchaseConfirmedExpenseSaved")} ${message(language, "streak.newRank")}: ${increase.rank.name[language]}!`
+        : tr("ui.purchaseConfirmedExpenseSaved"),
       pirate: increase?.promoted,
     });
     return true;

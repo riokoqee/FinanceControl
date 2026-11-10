@@ -3,6 +3,7 @@ import {
   STORAGE_KEY,
   MAX_AMOUNT,
   MAX_SHOPPING_TEMPLATES,
+  MAX_SHOPPING_ITEMS,
   MAX_TEMPLATE_ITEMS,
   convertAmount,
   createDemoData,
@@ -23,6 +24,16 @@ import {
 import type { StreakLedger } from './streak/streakTypes';
 import { REFERENCE_RATES } from './currency';
 import type { ExchangeRates } from './currency';
+
+describe('shared shopping-list capacity', () => {
+  it('accepts the documented capacity and rejects the next product', () => {
+    const shoppingList = Array.from({ length: MAX_SHOPPING_ITEMS }, (_, index) => ({
+      id: String(index), title: `Product ${index}`, currency: 'EUR' as const, createdAt: '2026-11-09',
+    }));
+    expect(validateBackup({ ...createEmptyData(), shoppingList }).shoppingList).toHaveLength(MAX_SHOPPING_ITEMS);
+    expect(() => validateBackup({ ...createEmptyData(), shoppingList: [...shoppingList, { ...shoppingList[0], id: 'extra' }] })).toThrow(/1000/);
+  });
+});
 
 describe('version-four manual currency settings', () => {
   const rates: ExchangeRates = { USD: 1, EUR: 0.96, KZT: 510.123456 };

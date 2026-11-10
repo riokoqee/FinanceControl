@@ -1,4 +1,7 @@
+import { withCanonicalVersion } from "../appDataVersion";
+import { LocalizedError } from "../localizedError";
 import {
+  MAX_SHOPPING_ITEMS,
   MAX_SHOPPING_TEMPLATES,
   MAX_TEMPLATE_ITEMS,
   createEmptyData,
@@ -8,7 +11,6 @@ import {
   type ShoppingTemplate,
 } from '../finance';
 
-const MAX_SHOPPING_ITEMS = 1_000;
 const makeId = () => globalThis.crypto?.randomUUID?.() ??
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
@@ -24,11 +26,11 @@ function pendingItems(data: AppData) {
 /** A reusable plan contains names and currencies, never past prices or expenses. */
 export function makeShoppingTemplate(name: string, data: AppData): ShoppingTemplate {
   if ((data.shoppingTemplates?.length ?? 0) >= MAX_SHOPPING_TEMPLATES) {
-    throw new Error('Можно сохранить не больше 20 шаблонов.');
+    throw new LocalizedError("ui.youCanSaveUpTo20Templates");
   }
   const pending = pendingItems(data);
   if (!pending.length || pending.length > MAX_TEMPLATE_ITEMS) {
-    throw new Error('В шаблоне должно быть от 1 до 200 товаров.');
+    throw new LocalizedError("ui.aTemplateMustContain1200Items");
   }
   const ids = new Set(data.shoppingTemplates?.map(({ id }) => id));
   let id = makeId();
@@ -46,7 +48,7 @@ const productKey = ({ title, currency }: { title: string; currency: string }) =>
 /** Apply against the latest data; either the complete plan fits or nothing changes. */
 export function applyShoppingTemplate(data: AppData, templateId: string): AppData {
   const stored = data.shoppingTemplates?.find(({ id }) => id === templateId);
-  if (!stored) throw new Error('Шаблон удалён. Откройте актуальный список.');
+  if (!stored) throw new LocalizedError("ui.theTemplateWasDeletedOpenTheCurrentList");
   const template = canonicalTemplate(stored);
   const planned = new Set(pendingItems(data).map(productKey));
   const additions = template.items.filter((item) => {
@@ -57,7 +59,7 @@ export function applyShoppingTemplate(data: AppData, templateId: string): AppDat
   });
   const list = data.shoppingList ?? [];
   if (list.length + additions.length > MAX_SHOPPING_ITEMS) {
-    throw new Error('В списке покупок может быть не больше 1000 товаров.');
+    throw new LocalizedError("ui.theShoppingListCanContainUpTo1000Products");
   }
   if (!additions.length) return data;
   const ids = new Set(list.map(({ id }) => id));
@@ -68,5 +70,5 @@ export function applyShoppingTemplate(data: AppData, templateId: string): AppDat
     ids.add(id);
     return { id, title, currency, createdAt };
   });
-  return { ...data, version: 2, shoppingList: [...list, ...rows] };
+  return withCanonicalVersion({ ...data, shoppingList: [...list, ...rows] });
 }

@@ -30,6 +30,7 @@ try {
   await run('tests/design-browser.mjs');
   await run('tests/streak-browser.mjs');
   await run('tests/portability-browser.mjs');
+  await run('tests/refactor-browser.mjs');
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

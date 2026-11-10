@@ -14,7 +14,9 @@ Every confirmed day adds one day to the current run and **500,000 fictional berr
 
 The user-approved rule is **one freeze for every seven lifetime confirmed tracking days, with a maximum balance of two**. Both `LOGGED` and `NO_SPEND` advance this progress; frozen days do not. Progress does not reset when a streak ends. A reward earned while the balance is already two is discarded, rather than banked for later.
 
-After local midnight, a freeze automatically protects the earliest missed day of an active run. That day becomes `FROZEN`: continuity is preserved, but the streak count, bounty and progress toward another freeze do not increase. If the inventory cannot cover the next missed day, that day is `MISSED` and the current run ends. Freezes are not spent on days after an already broken run. For example, seven confirmed days followed by two closed missed days with one freeze produce `FROZEN`, then `MISSED`; the best stays seven and the current bounty becomes zero.
+Protection is **all or nothing for the entire consecutive closed gap of an active run**. If the reserve covers every missed day, all become `FROZEN` and one freeze is spent per day. Continuity is preserved, but the streak count, bounty and reward progress do not increase. If the reserve is insufficient, the whole gap is `MISSED`, the run ends and the reserve is left untouched. No partial protection is spent.
+
+For example, seven confirmed days followed by two closed missed days with one freeze produce **two `MISSED` days and one remaining freeze**; the best stays seven and the current bounty becomes zero. Backfilling yesterday can reduce the remaining gap to one day, allowing the preserved freeze to reconnect the run. Because statuses are replayed, a protected one-day gap that later grows beyond the reserve becomes entirely `MISSED` and its reserve returns. Empty days after an already broken run do not consume freezes.
 
 ### Recent days and backfill
 
@@ -27,10 +29,13 @@ The overview and profile display a seven-day strip with a label and icon for eac
 | `FROZEN` | A freeze protected a closed missed day. |
 | `MISSED` | A closed day has no confirmation or protection. |
 | `PENDING` | Today is still open and has not been confirmed. |
+| `NONE` | Before tracking began; neutral and unavailable for backfill. |
+
+Tracking begins at the earlier of `startedOn` and the first confirmed date. Fresh installations show neutral earlier days rather than missed obligations; merely viewing them does not write a ledger. Today remains available even after a clock rollback. A backdated first purchase credits its creation day without opening days before tracking began.
 
 Select a recent unconfirmed day to confirm it. If a real expense exists with that purchase or creation date, confirmation uses `LOGGED`; otherwise it uses `NO_SPEND`. No placeholder or zero-value financial transaction is created. A frozen day can be confirmed, returning its freeze through recalculation; that freeze may then protect another eligible missed day. A missed day can also be confirmed and restore continuity if the remaining days connect.
 
-The backfill window is **48 elapsed hours after the target local calendar day ends, including the exact boundary**. The action checks eligibility again when saving, so an old open page cannot bypass expiry. Future days and invalid dates are rejected. Because the window uses elapsed hours, its local wall-clock deadline may shift by one hour across daylight-saving changes.
+The backfill window is **48 elapsed hours after the target local calendar day ends, including the exact boundary**. The central `confirmDay` action checks eligibility again when saving and chooses the real-expense/no-spend status; an old open page cannot bypass expiry. Future days, invalid dates and past days before tracking began are unavailable. Because the window uses elapsed hours, its local wall-clock deadline may shift by one hour across daylight-saving changes.
 
 The year activity heatmap still shows actual expense counts by creation date, falling back to purchase date for legacy records. Its best-streak statistic uses the new tracking history; the seven-day strip shows no-spend and freeze statuses separately.
 
@@ -53,22 +58,26 @@ A changed editor opened before another tab resets or replaces the history is rej
 | File | Responsibility |
 | --- | --- |
 | `src/lib/streak/streakTypes.ts` | Persisted contract, validation and concurrent date union. |
-| `src/lib/streak/streakLedger.ts` | Reconciliation, confirmation, automatic freezes, replay and recent-day views. |
+| `src/lib/streak/streakLedger.ts` | Reconciliation, central `confirmDay`, all-or-nothing freezes, replay and recent-day eligibility. |
+| `src/lib/streak/withTrackingDays.ts`, `src/lib/appDataVersion.ts` | Preserve daily facts with an expense in one mutation and select the feature-bearing data format. |
 | `src/hooks/useStreakStats.ts` | Shared local-day clock and cache keyed by immutable transactions and ledger. |
 | `src/lib/streak/streakCopy.ts` | English and Russian strings for this feature. |
 | `src/components/StreakDays.tsx` | Accessible recent-day selection and confirmation. |
 | `src/components/StreakBounty.tsx` | Daily action, inventory, progress and WANTED presentation. |
 | `src/components/StreakBadge.tsx`, `src/components/ActivityCalendar.tsx` | Shared tracking statistics in navigation and profile. |
 | `src/components/StreakDays.css`, `src/components/StreakBounty.css` | Responsive controls, theme tokens and reduced-motion support. |
-| `src/App.tsx`, `src/hooks/useDataTransfer.ts` | Atomic persistence, confirmations, import and transient feedback. |
+| `src/hooks/useAppData.ts`, `src/hooks/usePersistentData.ts` | Atomic persistence; operation metadata comes only from the successfully committed retry. |
+| `src/hooks/useTrackingActions.ts`, `src/hooks/useTransactions.ts`, `src/hooks/useShoppingActions.ts`, `src/hooks/useBackupRestore.ts` | Domain actions, confirmations, import and transient feedback; App connects them to views. |
 | `src/lib/finance.ts`, `src/lib/storage/storage.ts` | Tracking validation, preservation and merging, including format 4 profiles. |
 | `src/pages/OverviewPage.tsx`, `src/pages/ProfilePage.tsx`, `src/lib/i18n.tsx`, `index.html` | View integration, localization and saved-theme bootstrap. |
 | `src/lib/streak/*.test.ts`, `src/hooks/useStreakStats.test.ts`, `tests/streak-browser.mjs`, `tests/run-browser.mjs`, `tests/design-browser.mjs` | Domain, storage, PDF, migration, production UI and regression checks. |
 
+Reconciliation caches one latest snapshot per immutable transaction-array reference and ledger/local-day combination. Replay caches one latest local day per immutable ledger reference. Widget reads reuse these snapshots instead of rescanning large histories; new references or a new day invalidate them. Exact 48-hour eligibility is checked outside the replay cache, so it still expires within the same day. App state and cached snapshots must remain immutable. Retried operations return `{ data, result }` and publish feedback only after the primary write succeeds; failed attempts cannot leak a reward or toast.
+
 Run all unit tests with `npm test`. Focused domain checks:
 
 ```bash
-npm test -- src/lib/streak/streakLedger.test.ts src/lib/streak/streak.test.ts src/hooks/useStreakStats.test.ts
+npm test -- src/lib/streak src/lib/storage/storage.test.ts src/hooks/useStreakStats.test.ts
 ```
 
 Run the production browser checks with:
@@ -81,7 +90,7 @@ npm run test:browser
 
 Historical verification: release 2.7.0 passed **428 unit tests and 151 production browser scenarios**, including 18 tracking-specific browser scenarios. Both the ordinary build and the GitHub Pages build passed. An additional eight mobile checks covered Russian/English, light/dark themes and protected/restarted runs, with no accessibility violations, JavaScript errors or horizontal page overflow; all new buttons measured at least 44 × 44 pixels.
 
-These unit cases include recording/no-spend days, protected and unprotected gaps, two missed days with one freeze, inventory rewards/cap, backfill from frozen/missed, expiry, replay and confirmation idempotency, legacy migration, concurrent merges, midnight, timezone changes and daylight-saving boundaries. Runtime data remains local to each browser; device clocks and dates are trusted, and this feature does not add account synchronization or server-side clock verification.
+Current cases cover recording/no-spend days, whole-gap protection, insufficient reserve without partial spending, inventory rewards/cap, backfill from frozen/missed, expiry, neutral onboarding, replay and confirmation idempotency, legacy migration, concurrent merges, failed writes, immutable-reference caches, midnight, timezone changes and daylight-saving boundaries. Runtime data remains local to each browser; device clocks and dates are trusted, and this feature does not add account synchronization or server-side clock verification.
 
 ### Explicit assumptions
 
@@ -101,7 +110,9 @@ The supplied prompt starts midway through its specification. The confirmed seven
 
 Пользователь подтвердил правило: **одна заморозка за каждые семь подтверждённых дней учёта за всё время, максимум две в запасе**. В прогресс входят `LOGGED` и `NO_SPEND`; замороженные дни не входят. Прогресс не сбрасывается при прерывании серии. Если на очередном пороге уже есть две заморозки, новая не откладывается сверх лимита.
 
-После местной полуночи заморозка автоматически защищает первый пропущенный день активной серии. Он получает статус `FROZEN`: непрерывность сохраняется, но длина серии, награда и прогресс получения заморозки не растут. Если следующему пропущенному дню защиты не хватает, он получает `MISSED`, а текущая серия прерывается. После уже прерванной серии заморозки на пустые дни не расходуются. Например, после семи подтверждённых дней два закрытых пропуска при одной заморозке дают сначала `FROZEN`, затем `MISSED`; лучшая серия остаётся семь, текущая награда становится нулевой.
+Защита применяется **целиком ко всему последовательному закрытому пропуску активной серии**. Если запаса хватает на каждый день, все дни получают `FROZEN`, а за каждый расходуется одна заморозка. Непрерывность сохраняется, но длина серии, награда и прогресс не растут. Если запаса недостаточно, весь промежуток получает `MISSED`, серия прерывается, запас остаётся нетронутым. Частичная защита не расходуется.
+
+Например, после семи подтверждённых дней два закрытых пропуска при одной заморозке дают **два дня `MISSED` и одну оставшуюся заморозку**; лучшая серия остаётся семь, текущая награда равна нулю. Подтверждение вчерашнего дня может сократить оставшийся пропуск до одного дня: сохранённая заморозка соединит серию. Статусы пересчитываются, поэтому ранее защищённый однодневный пропуск, который вырос сверх запаса, целиком становится `MISSED`, а запас возвращается. Пустые дни после уже прерванной серии заморозок не расходуют.
 
 ### Последние дни и подтверждение задним числом
 
@@ -114,10 +125,13 @@ The supplied prompt starts midway through its specification. The confirmed seven
 | `FROZEN` | Заморозка защитила закрытый пропущенный день. |
 | `MISSED` | Закрытый день не подтверждён и не защищён. |
 | `PENDING` | Сегодняшний день ещё открыт и не подтверждён. |
+| `NONE` | До начала учёта: нейтральный день без подтверждения задним числом. |
+
+Начало учёта — более ранняя из дат `startedOn` и первого подтверждённого дня. Новая установка показывает нейтральные прошлые дни, а не пропущенные обязанности; их просмотр не сохраняет историю. Сегодняшнее подтверждение доступно даже после перевода часов назад. Первая покупка, внесённая задним числом, засчитывает день создания, не открывая дни до начала учёта.
 
 Выберите недавний неподтверждённый день, чтобы подтвердить его. Если есть реальный расход с такой датой покупки или создания, используется `LOGGED`, иначе — `NO_SPEND`. Фиктивный расход или запись с нулевой суммой не создаются. Подтверждение замороженного дня возвращает защиту через пересчёт; она может защитить другой подходящий пропуск. Подтверждение пропущенного дня также может восстановить непрерывность, если остальные дни соединяются.
 
-Окно подтверждения — **48 фактически прошедших часов после окончания выбранного местного календарного дня, включая точную границу**. Доступность повторно проверяется при сохранении: давно открытая страница не позволяет обойти срок. Будущие и некорректные даты отклоняются. Из-за расчёта прошедших часов местное время окончания окна может сдвинуться на час при переходе на летнее или зимнее время.
+Окно подтверждения — **48 фактически прошедших часов после окончания выбранного местного календарного дня, включая точную границу**. Единое действие `confirmDay` повторно проверяет доступность при сохранении и выбирает статус по реальному расходу: давно открытая страница не позволяет обойти срок. Будущие и некорректные даты и прошлые дни до начала учёта недоступны. Из-за расчёта прошедших часов местное время окончания окна может сдвинуться на час при переходе на летнее или зимнее время.
 
 Годовой календарь активности по-прежнему показывает количество реальных записей по дате создания, а для старых записей — по дате покупки. Его показатель лучшей серии использует новую историю учёта; дни без трат и заморозки отдельно показаны в ленте семи дней.
 
@@ -140,22 +154,26 @@ The supplied prompt starts midway through its specification. The confirmed seven
 | Файл | Назначение |
 | --- | --- |
 | `src/lib/streak/streakTypes.ts` | Формат истории, валидация и объединение дат между вкладками. |
-| `src/lib/streak/streakLedger.ts` | Подтверждения, автоматические заморозки, пересчёт и последние дни. |
+| `src/lib/streak/streakLedger.ts` | Пересчёт, единое действие `confirmDay`, защита всего пропуска и доступность последних дней. |
+| `src/lib/streak/withTrackingDays.ts`, `src/lib/appDataVersion.ts` | Подтверждения вместе с расходом одним изменением данных и выбор формата по сохранённым функциям. |
 | `src/hooks/useStreakStats.ts` | Общие часы местного дня и кеш по неизменяемым расходам и истории. |
 | `src/lib/streak/streakCopy.ts` | Английские и русские строки функции. |
 | `src/components/StreakDays.tsx` | Доступный выбор и подтверждение недавнего дня. |
 | `src/components/StreakBounty.tsx` | Ежедневное действие, запас, прогресс и постер WANTED. |
 | `src/components/StreakBadge.tsx`, `src/components/ActivityCalendar.tsx` | Общая статистика учёта в навигации и профиле. |
 | `src/components/StreakDays.css`, `src/components/StreakBounty.css` | Адаптивные кнопки, переменные темы и поддержка уменьшенного движения. |
-| `src/App.tsx`, `src/hooks/useDataTransfer.ts` | Атомарное сохранение, подтверждения, импорт и обратная связь. |
+| `src/hooks/useAppData.ts`, `src/hooks/usePersistentData.ts` | Атомарное сохранение; результат возвращается только из успешно записанной попытки. |
+| `src/hooks/useTrackingActions.ts`, `src/hooks/useTransactions.ts`, `src/hooks/useShoppingActions.ts`, `src/hooks/useBackupRestore.ts` | Действия предметной области, подтверждения, импорт и обратная связь; App соединяет их со страницами. |
 | `src/lib/finance.ts`, `src/lib/storage/storage.ts` | Валидация, сохранение и объединение истории, включая профили формата 4. |
 | `src/pages/OverviewPage.tsx`, `src/pages/ProfilePage.tsx`, `src/lib/i18n.tsx`, `index.html` | Подключение страниц, локализация и раннее применение сохранённой темы. |
 | `src/lib/streak/*.test.ts`, `src/hooks/useStreakStats.test.ts`, `tests/streak-browser.mjs`, `tests/run-browser.mjs`, `tests/design-browser.mjs` | Проверки движка, хранилища, PDF, миграции, интерфейса сборки и регрессий. |
 
+Пересчёт хранит один последний снимок для неизменяемой ссылки на массив расходов и сочетания истории с местным днём. Повторный расчёт серии хранит один последний местный день на неизменяемую ссылку истории. Виджеты используют эти снимки без повторного сканирования больших массивов; новые ссылки или новый день обновляют результат. Точная доступность 48-часового окна проверяется вне кеша серии, поэтому срок истекает и внутри того же дня. Состояние приложения и снимки кеша должны оставаться неизменяемыми. Операции возвращают `{ data, result }` и публикуют обратную связь после успешной записи: неудачная попытка не выдаёт награду или сообщение об успехе.
+
 Все модульные проверки: `npm test`. Проверки движка отдельно:
 
 ```bash
-npm test -- src/lib/streak/streakLedger.test.ts src/lib/streak/streak.test.ts src/hooks/useStreakStats.test.ts
+npm test -- src/lib/streak src/lib/storage/storage.test.ts src/hooks/useStreakStats.test.ts
 ```
 
 Браузерные проверки производственной сборки:
@@ -168,7 +186,7 @@ npm run test:browser
 
 Историческая проверка релиза 2.7.0: пройдены **428 модульных тестов и 151 браузерный сценарий производственной сборки**, включая 18 сценариев новой механики учёта. Обычная сборка и сборка для GitHub Pages завершились успешно. Дополнительно проверены восемь мобильных сочетаний языка RU/EN, светлой/тёмной темы и сохранённой/прерванной серии: нарушений доступности, ошибок JavaScript и горизонтального переполнения страницы не найдено; все новые кнопки имеют размер не меньше 44 × 44 пикселей.
 
-Модульные сценарии включают запись и день без трат, пропуски с защитой и без неё, два пропуска при одной заморозке, выдачу и потолок запаса, подтверждение замороженного и пропущенного дня, срок подтверждения, идемпотентность, миграцию, объединение вкладок, полночь, смену часового пояса и перевод часов. Данные остаются локальными в браузере; приложение доверяет часам устройства и не добавляет синхронизацию аккаунта или серверную проверку времени.
+Текущие сценарии включают запись и день без трат, защиту всего пропуска, недостаточный запас без частичной траты, выдачу и потолок запаса, подтверждение замороженного и пропущенного дня, срок, нейтральное начало, идемпотентность, миграцию, объединение вкладок, ошибки записи, кеш по неизменяемым ссылкам, полночь, смену часового пояса и перевод часов. Данные остаются локальными в браузере; приложение доверяет часам устройства и не добавляет синхронизацию аккаунта или серверную проверку времени.
 
 ### Явные допущения
 

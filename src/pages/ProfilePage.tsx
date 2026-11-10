@@ -1,3 +1,4 @@
+import type { MessageKey } from "../lib/messages";
 import { useMemo, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
@@ -84,7 +85,7 @@ export default function ProfilePage({
   onNoSpend,
   onConfirmDay,
 }: ProfilePageProps) {
-  const tr = (text: string) => translate(language, text);
+  const tr = (text: MessageKey) => translate(language, text);
   const avatarRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   // A name keystroke should not serialize an unchanged multi-megabyte journal again.
@@ -125,7 +126,7 @@ export default function ProfilePage({
       >
         <div className="panel-header">
           <div>
-            <h2>{tr("Личные настройки")}</h2>
+            <h2>{tr("ui.personalSettings")}</h2>
           </div>
           <UserRound size={20} className="muted-icon" />
         </div>
@@ -133,16 +134,16 @@ export default function ProfilePage({
           <button
             type="button"
             className="profile-avatar profile-avatar-edit"
-            aria-label={tr("Редактировать аватар")}
-            title={tr("Редактировать аватар")}
+            aria-label={tr("ui.editAvatar")}
+            title={tr("ui.editAvatar")}
             onClick={() =>
               data.profile.avatar ? onEditAvatar() : avatarRef.current?.click()
             }
           >
             {data.profile.avatar ? (
-              <img src={data.profile.avatar} alt={tr("Аватар пользователя")} />
+              <img src={data.profile.avatar} alt={tr("ui.userAvatar")} />
             ) : (
-              initials || tr("П")
+              initials || tr("ui.u")
             )}
             <span className="profile-avatar-edit-icon" aria-hidden="true">
               <Camera size={13} />
@@ -151,7 +152,7 @@ export default function ProfilePage({
           <div>
             <strong>
               {data.profile.name === "Пользователь"
-                ? tr("Пользователь")
+                ? tr("ui.user")
                 : data.profile.name}
             </strong>
           </div>
@@ -160,18 +161,18 @@ export default function ProfilePage({
           <div className="avatar-editor-actions">
             <Button onClick={() => avatarRef.current?.click()}>
               <Camera size={15} />
-              {tr("Сменить аватар")}
+              {tr("ui.changeAvatar")}
             </Button>
             {data.profile.avatar && (
               <Button onClick={() => onEditAvatar()}>
                 <Pencil size={15} />
-                {tr("Редактировать аватар")}
+                {tr("ui.editAvatar")}
               </Button>
             )}
             {data.profile.avatar && (
               <Button onClick={onRemoveAvatar}>
                 <Trash2 size={15} />
-                {tr("Удалить аватар")}
+                {tr("ui.removeAvatar")}
               </Button>
             )}
           </div>
@@ -180,7 +181,7 @@ export default function ProfilePage({
             ref={avatarRef}
             type="file"
             accept="image/png,image/jpeg,image/webp"
-            aria-label={tr("Выбрать аватар")}
+            aria-label={tr("ui.chooseAvatar")}
             onChange={(e) => {
               onAvatarSelect(e.target.files?.[0]);
               e.target.value = "";
@@ -189,7 +190,7 @@ export default function ProfilePage({
         </div>
         <div className="form-row">
           <label className="field">
-            <span className="field-label">{tr("Как к вам обращаться")}</span>
+            <span className="field-label">{tr("ui.whatShouldWeCallYou")}</span>
             <input
               className="form-input"
               required
@@ -198,12 +199,12 @@ export default function ProfilePage({
               onChange={(e) =>
                 setProfile((p) => ({ ...p, name: e.target.value }))
               }
-              placeholder={tr("Ваше имя")}
+              placeholder={tr("ui.yourName")}
             />
           </label>
           <label className="field">
             <span className="field-label">
-              Email <small>{tr("необязательно")}</small>
+              Email <small>{tr("ui.optional")}</small>
             </span>
             <input
               className="form-input"
@@ -220,7 +221,7 @@ export default function ProfilePage({
         <div className="settings-group">
           <div className="form-row">
             <label className="field">
-              <span className="field-label">{tr("Основная валюта")}</span>
+              <span className="field-label">{tr("ui.mainCurrency")}</span>
               <select
                 className="form-input"
                 value={profile.currency}
@@ -228,13 +229,13 @@ export default function ProfilePage({
               >
                 {CURRENCIES.map((c) => (
                   <option key={c.code} value={c.code}>
-                    {c.code} — {tr(c.label)}
+                    {c.code} — {tr(c.labelKey)}
                   </option>
                 ))}
               </select>
             </label>
             <label className="field">
-              <span className="field-label">{tr("Бюджет на месяц")}</span>
+              <span className="field-label">{tr("ui.monthlyBudgetAlternative")}</span>
               <div className="input-prefix">
                 <input
                   className="form-input"
@@ -254,22 +255,22 @@ export default function ProfilePage({
                 <span>{profile.currency}</span>
               </div>
               <span className="field-hint">
-                {tr("Один лимит для всех месяцев.")}
+                {tr("ui.oneBudgetForEveryMonth")}
               </span>
             </label>
           </div>
           <ExchangeRatesSettings rates={data.profile.exchangeRates} language={language} onSave={onExchangeRatesSave} />
         </div>
         <div className="settings-group">
-          <h3>{tr("Тема оформления")}</h3>
+          <h3>{tr("ui.appearance")}</h3>
           <div className="theme-options">
             {(
               [
-                { id: "light", label: tr("Светлая"), icon: Sun },
-                { id: "dark", label: tr("Тёмная"), icon: Moon },
+                { id: "light", label: tr("theme.light"), icon: Sun },
+                { id: "dark", label: tr("theme.dark"), icon: Moon },
                 {
                   id: "system",
-                  label: tr("Как в системе"),
+                  label: tr("ui.system"),
                   icon: Monitor,
                 },
               ] as const
@@ -283,16 +284,16 @@ export default function ProfilePage({
                 }}
               >
                 <t.icon size={21} />
-                <span>{tr(t.label)}</span>
+                <span>{t.label}</span>
                 {profile.theme === t.id && <Check size={14} />}
               </button>
             ))}
           </div>
         </div>
         <div className="settings-group">
-          <h3>{tr("Язык интерфейса")}</h3>
+          <h3>{tr("ui.interfaceLanguage")}</h3>
           <label className="field">
-            <span className="sr-only">{tr("Язык интерфейса")}</span>
+            <span className="sr-only">{tr("ui.interfaceLanguage")}</span>
             <select
               className="form-input"
               value={language}
@@ -300,24 +301,24 @@ export default function ProfilePage({
                 onLanguageChange(event.target.value as Language)
               }
             >
-              <option value="ru">{tr("Русский")}</option>
-              <option value="en">{tr("Английский")}</option>
+              <option value="ru">{tr("ui.russian")}</option>
+              <option value="en">{tr("ui.english")}</option>
             </select>
           </label>
         </div>
         <div className="profile-save">
           {storageError && (
             <Button onClick={onReload}>
-              {tr("Загрузить актуальный профиль")}
+              {tr("ui.loadCurrentProfile")}
             </Button>
           )}
           <span>
             <ShieldCheck size={14} />
-            {tr("Автосохранение")}
+            {tr("ui.autosave")}
           </span>
           <Button variant="primary" type="submit">
             <Check size={17} />
-            {tr("Сохранить настройки")}
+            {tr("ui.saveSettings")}
           </Button>
         </div>
       </form>
@@ -328,44 +329,44 @@ export default function ProfilePage({
             <span className="storage-orbit orbit-one" />
             <span className="storage-orbit orbit-two" />
           </div>
-          <h2>{tr("Данные")}</h2>
+          <h2>{tr("ui.data")}</h2>
           <p>
             {settingsCopy[language].localData}
           </p>
           <div className="storage-details">
             <div>
-              <span>{tr("Всего записей")}</span>
+              <span>{tr("ui.totalRecords")}</span>
               <strong>{data.transactions.length}</strong>
             </div>
             <div>
-              <span>{tr("Размер данных")}</span>
+              <span>{tr("ui.dataSize")}</span>
               <strong>
-                {(dataSize / 1024).toFixed(1)} {tr("КБ")}
+                {(dataSize / 1024).toFixed(1)} {tr("ui.kb")}
               </strong>
             </div>
             <div>
-              <span>{tr("Состояние")}</span>
+              <span>{tr("ui.status")}</span>
               <strong className={storageOk ? "storage-good" : "storage-error"}>
-                {storageOk ? tr("Сохранено") : tr("Ошибка сохранения")}
+                {storageOk ? tr("ui.saved") : tr("ui.saveFailed")}
               </strong>
             </div>
           </div>
           <div className="storage-actions">
             <Button onClick={onExport}>
               <Download size={16} />
-              {tr("PDF-копия со всеми данными")}
+              {tr("ui.pdfBackupWithAllYourData")}
             </Button>
             <Button onClick={onExportJson}><Download size={16} />{settingsCopy[language].jsonBackup}</Button>
             <Button onClick={onExportCsv}><Download size={16} />{settingsCopy[language].csvReport}</Button>
             <Button onClick={() => importRef.current?.click()}>
               <Upload size={16} />
-              {tr("Импортировать PDF-копию")}
+              {tr("ui.importPdfBackup")}
             </Button>
             <input
               ref={importRef}
               type="file"
               accept=".pdf,application/pdf,.json,application/json"
-              aria-label={tr("Импортировать PDF-копию")}
+              aria-label={tr("ui.importPdfBackup")}
               className="sr-only"
               onChange={(e) => {
                 onImport(e.target.files?.[0]);
@@ -377,12 +378,12 @@ export default function ProfilePage({
         <section className="panel demo-card">
           <Sparkles size={19} />
           <div>
-            <h3>{tr("Попробовать на примере")}</h3>
+            <h3>{tr("ui.tryAnExample")}</h3>
           </div>
           <button
             className="icon-button"
             onClick={onDemo}
-            aria-label={tr("Загрузить демо")}
+            aria-label={tr("ui.loadDemo")}
           >
             <ArrowUpRight size={20} />
           </button>
@@ -390,10 +391,10 @@ export default function ProfilePage({
         <div className="data-danger-zone">
           <button onClick={onReset}>
             <Trash2 size={15} />
-            {tr("Удалить все данные")}
+            {tr("ui.deleteAllData")}
           </button>
           <p>
-            {tr("Удаляет все данные BeliLog из этого браузера.")}
+            {tr("ui.deletesAllBelilogDataFromThisBrowser")}
           </p>
         </div>
       </div>

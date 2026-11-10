@@ -7,6 +7,7 @@ import {
   StorageRecoveryError,
   commitStoredData,
   commitStoredMutation,
+  commitStoredOperation,
   mergeAppData,
   mergeCategoryBudgetsDraft,
   mergeProfileDraft,
@@ -33,6 +34,120 @@ function memoryStorage(initial: Record<string, string> = {}) {
     setItem: (key: string, value: string) => { writes.push([key, value]); values.set(key, value); },
   };
 }
+
+describe('committed operation metadata', () => {
+  it('returns metadata from the latest primary and persists data without metadata', () => {
+    const base = data();
+    const remote = { ...base, transactions: [expense({ amount: 40 })] };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(remote) });
+    const saved = commitStoredOperation(base, (current) => ({
+      data: { ...current, profile: { ...current.profile, name: 'Captain' } },
+      result: { previousAmount: current.transactions[0].amount, message: 'saved' },
+    }), storage);
+    expect(saved.result).toEqual({ previousAmount: 40, message: 'saved' });
+    expect(saved.data.profile.name).toBe('Captain');
+    expect(saved.data.transactions[0].amount).toBe(40);
+    expect(JSON.parse(storage.values.get(STORAGE_KEY)!)).toEqual(saved.data);
+    expect(JSON.parse(storage.values.get(STORAGE_KEY)!)).not.toHaveProperty('result');
+  });
+
+  it('discards a reward from a failed attempt when another tab confirms before its write', () => {
+    const base = createEmptyData();
+    const confirmed: AppData = {
+      ...base, version: 3,
+      streak: { version: 1, startedOn: '2026-11-09', confirmedDays: [{ date: '2026-11-09', status: 'LOGGED' }] },
+    };
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    let reads = 0;
+    const racing = { ...storage, getItem: (key: string) => {
+      if (key === STORAGE_KEY && ++reads === 2) storage.values.set(key, JSON.stringify(confirmed));
+      return storage.getItem(key);
+    } };
+    const saved = commitStoredOperation(base, (current) => current.streak?.confirmedDays.length
+      ? { data: current, result: { awarded: false, amount: 0 } }
+      : { data: { ...current, streak: {
+        version: 1, startedOn: '2026-11-09', confirmedDays: [{ date: '2026-11-09', status: 'NO_SPEND' }],
+      } }, result: { awarded: true, amount: 500_000 } }, racing);
+    expect(reads).toBe(4);
+    expect(saved.result).toEqual({ awarded: false, amount: 0 });
+    expect(saved.data.streak).toEqual(confirmed.streak);
+    expect(storage.writes.filter(([key]) => key === STORAGE_KEY)).toHaveLength(1);
+  });
+
+  it('keeps structural sharing and record order when metadata accompanies a profile change', () => {
+    const base = data();
+    base.transactions.push(expense({ id: 'second', amount: 30 }));
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const saved = commitStoredOperation(base, (current) => ({
+      data: { ...current, profile: { ...current.profile, language: 'en' }, transactions: [...current.transactions].reverse() },
+      result: 'profile',
+    }), storage);
+    expect(saved.result).toBe('profile');
+    expect(saved.data.transactions).toBe(base.transactions);
+    expect(saved.data.transactions.map((entry) => entry.id)).toEqual(['expense', 'second']);
+  });
+
+  it('throws instead of returning generated metadata when the primary write fails', () => {
+    const base = data();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const full = { getItem: storage.getItem, setItem: () => { throw new Error('QuotaExceededError'); } };
+    expect(() => commitStoredOperation(base, (current) => ({
+      data: { ...current, profile: { ...current.profile, name: 'Captain' } }, result: { awarded: true },
+    }), full)).toThrow('QuotaExceededError');
+    expect(readStoredData(storage).data).toEqual(base);
+    expect(storage.writes).toEqual([]);
+  });
+
+  it('still returns the committed result when only the secondary copy is full', () => {
+    const base = data();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    const fullSecondary = { ...storage, setItem: (key: string, value: string) => {
+      if (key === LAST_GOOD_KEY) throw new Error('QuotaExceededError');
+      storage.setItem(key, value);
+    } };
+    const saved = commitStoredOperation(base, (current) => ({
+      data: { ...current, profile: { ...current.profile, name: 'Captain' } }, result: 7,
+    }), fullSecondary);
+    expect(saved.result).toBe(7);
+    expect(readStoredData(storage).data).toEqual(saved.data);
+  });
+
+  it('retains recovery and validation guards before returning any result', () => {
+    const base = data();
+    const damaged = memoryStorage({ [STORAGE_KEY]: '{damaged', [LAST_GOOD_KEY]: JSON.stringify(base) });
+    expect(() => commitStoredOperation(base, () => { throw new Error('Operation must not run'); }, damaged)).toThrow(StorageRecoveryError);
+    expect(damaged.writes).toEqual([]);
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    expect(() => commitStoredOperation(base, (current) => ({
+      data: { ...current, transactions: [expense({ amount: 0 })] }, result: { awarded: true },
+    }), storage)).toThrow();
+    expect(storage.writes).toEqual([]);
+  });
+
+  it('archives corrupt data before an explicit operation replacement and returns its committed result', () => {
+    const storage = memoryStorage({ [STORAGE_KEY]: '{damaged' });
+    const saved = commitStoredOperation(createEmptyData(), () => ({ data: data(), result: 'restored' }), storage, { replaceCorrupt: true });
+    expect(saved.result).toBe('restored');
+    expect(storage.writes.map(([key]) => key)).toEqual([CORRUPT_KEY, STORAGE_KEY, LAST_GOOD_KEY]);
+    expect(storage.values.get(CORRUPT_KEY)).toBe('{damaged');
+    expect(readStoredData(storage).data).toEqual(saved.data);
+  });
+
+  it('stops repeated racing operations without returning metadata or discarding remote changes', () => {
+    const base = data();
+    const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(base) });
+    let reads = 0;
+    const racing = { ...storage, getItem: (key: string) => {
+      if (key === STORAGE_KEY) storage.values.set(key, JSON.stringify({ ...base, profile: { ...base.profile, monthlyBudget: ++reads } }));
+      return storage.getItem(key);
+    } };
+    expect(() => commitStoredOperation(base, (current) => ({
+      data: { ...current, profile: { ...current.profile, name: 'Captain' } }, result: current.profile.monthlyBudget,
+    }), racing)).toThrow(DataConflictError);
+    expect(reads).toBe(6);
+    expect(storage.writes).toEqual([]);
+  });
+});
 
 describe('persistent accounting-day confirmations', () => {
   const ledger = (...confirmedDays: StreakLedger['confirmedDays']): StreakLedger => ({

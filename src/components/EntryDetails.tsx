@@ -1,3 +1,4 @@
+import type { MessageKey } from "../lib/messages";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
@@ -35,7 +36,7 @@ export default function EntryDetails({
   onEdit: () => void;
   onExport: () => void;
 }) {
-  const tr = (text: string) => translate(language, text);
+  const tr = (text: MessageKey) => translate(language, text);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
@@ -45,14 +46,14 @@ export default function EntryDetails({
   const money = (value: number) =>
     formatMoney(value, transaction.currency, language);
   const updateItems = useCallback((next: TransactionItem[]) => {
-    const tr = (text: string) => translate(language, text);
+    const tr = (text: MessageKey) => translate(language, text);
     const nextTotal = getItemTotal({ items: next });
     if (Math.round(nextTotal * 100) > Math.round(transaction.amount * 100)) {
-      setError(tr("Сумма покупок не может превышать общую сумму записи."));
+      setError(tr("ui.theItemTotalCannotExceedTheRecordAmount"));
       return false;
     }
     if (!onChange({ ...transaction, items: next })) {
-      setError(tr("Изменения не сохранены. Проверьте актуальные данные и попробуйте ещё раз."));
+      setError(tr("ui.changesWereNotSavedCheckTheCurrentDataAndTryAgain"));
       return false;
     }
     setError("");
@@ -71,11 +72,11 @@ export default function EntryDetails({
       numeric < 0.01 ||
       numeric > 1e12
     ) {
-      setError(tr("Укажите название и сумму не меньше 0,01."));
+      setError(tr("ui.enterATitleAndAnAmountOfAtLeast001"));
       return;
     }
     if (items.length >= 200) {
-      setError(tr("В одной записи может быть не больше 200 покупок."));
+      setError(tr("ui.aRecordCanContainUpTo200Items"));
       return;
     }
     if (
@@ -98,7 +99,7 @@ export default function EntryDetails({
           className="icon-button modal-close"
           type="button"
           onClick={onClose}
-          aria-label={tr("Закрыть")}
+          aria-label={tr("common.close")}
         >
           <X size={21} />
         </button>
@@ -116,15 +117,15 @@ export default function EntryDetails({
           <span>·</span>
           <span>
             {tr(
-              CATEGORIES.find((c) => c.id === transaction.category)?.label ??
-                "",
+              CATEGORIES.find((c) => c.id === transaction.category)?.labelKey ??
+                "category.other",
             )}
           </span>
         </div>
         {transaction.note && <p className="detail-note">{transaction.note}</p>}
       </div>
       <div className="items-header">
-        <h3>{tr("Что было в покупке")}</h3>
+        <h3>{tr("ui.whatYouBought")}</h3>
         <span>{items.length} / 200</span>
       </div>
       {items.length ? (
@@ -143,17 +144,17 @@ export default function EntryDetails({
       ) : null}
       <form className="add-item-form" onSubmit={addItem}>
         <label>
-          {tr("Название покупки")}
+          {tr("ui.itemName")}
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={tr("Например, батон")}
+            placeholder={tr("ui.forExampleBread")}
             required
             maxLength={160}
           />
         </label>
         <label>
-          {tr("Сумма")} · {transaction.currency}
+          {tr("ui.amount")} · {transaction.currency}
           <input
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
@@ -169,7 +170,7 @@ export default function EntryDetails({
           disabled={items.length >= 200}
         >
           <Plus size={16} />
-          {tr("Добавить")}
+          {tr("common.add")}
         </button>
       </form>
       {error && (
@@ -178,7 +179,7 @@ export default function EntryDetails({
         </p>
       )}
       <div className="item-total-row">
-        <span>{tr("Расшифровано")}</span>
+        <span>{tr("ui.itemized")}</span>
         <strong>
           {money(itemTotal)} / {money(transaction.amount)}
         </strong>
@@ -191,12 +192,12 @@ export default function EntryDetails({
         />
       </div>
       <div className="item-total-summary">
-        <span>{tr("Осталось расшифровать")}</span>
+        <span>{tr("ui.leftToItemize")}</span>
         <strong>{money(Math.max(0, remaining))}</strong>
       </div>
       <div className="detail-autosave">
         <ShieldCheck size={14} />
-        {tr("Автосохранение")}
+        {tr("ui.autosave")}
       </div>
       <div className="dialog-footer">
         <button
@@ -213,7 +214,7 @@ export default function EntryDetails({
           onClick={onEdit}
         >
           <Pencil size={15} />
-          {tr("Изменить запись")}
+          {tr("ui.editRecord")}
         </button>
         <button
           type="button"
@@ -221,7 +222,7 @@ export default function EntryDetails({
           onClick={onClose}
         >
           <Check size={16} />
-          {tr("Готово")}
+          {tr("common.done")}
         </button>
       </div>
     </div>
@@ -240,7 +241,7 @@ const ItemRow = memo(function ItemRow({
   onSave: (next: TransactionItem) => boolean;
   onDelete: (id: string) => void;
 }) {
-  const tr = (text: string) => translate(language, text);
+  const tr = (text: MessageKey) => translate(language, text);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [amount, setAmount] = useState(String(item.amount));
@@ -261,14 +262,14 @@ const ItemRow = memo(function ItemRow({
       numeric < 0.01 ||
       numeric > 1e12
     ) {
-      setError(tr("Укажите название и сумму не меньше 0,01."));
+      setError(tr("ui.enterATitleAndAnAmountOfAtLeast001"));
       return;
     }
     const changedTitle = title.trim() !== baseline.current.title;
     const changedAmount = numeric !== baseline.current.amount;
     if ((changedTitle && item.title !== baseline.current.title && item.title !== title.trim()) ||
         (changedAmount && item.amount !== baseline.current.amount && item.amount !== numeric)) {
-      setError(tr("Покупка изменена в другой вкладке. Отмените редактирование и откройте её заново."));
+      setError(tr("ui.thisItemChangedInAnotherTabCancelEditingAndOpenItAgain"));
       return;
     }
     if (onSave({ ...item, title: changedTitle ? title.trim() : item.title, amount: changedAmount ? numeric : item.amount })) {
@@ -282,7 +283,7 @@ const ItemRow = memo(function ItemRow({
         <form className="item-edit-form" onSubmit={submit}>
           <div className="item-fields">
             <label>
-              {tr("Название покупки")}
+              {tr("ui.itemName")}
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -291,7 +292,7 @@ const ItemRow = memo(function ItemRow({
               />
             </label>
             <label>
-              {tr("Сумма")} · {currency}
+              {tr("ui.amount")} · {currency}
               <input
                 inputMode="decimal"
                 value={amount}
@@ -304,8 +305,8 @@ const ItemRow = memo(function ItemRow({
           <button
             type="submit"
             className="icon-button"
-            aria-label={tr("Сохранить покупку")}
-            title={tr("Сохранить покупку")}
+            aria-label={tr("ui.saveItem")}
+            title={tr("ui.saveItem")}
           >
             <Check size={17} />
           </button>
@@ -318,7 +319,7 @@ const ItemRow = memo(function ItemRow({
               setEditing(false);
               setError("");
             }}
-            aria-label={tr("Отмена")}
+            aria-label={tr("common.cancel")}
           >
             <X size={17} />
           </button>
@@ -334,8 +335,8 @@ const ItemRow = memo(function ItemRow({
             type="button"
             className="icon-button"
             onClick={() => { baseline.current = item; setEditing(true); }}
-            aria-label={`${tr("Изменить покупку")}: ${item.title}`}
-            title={tr("Изменить покупку")}
+            aria-label={`${tr("ui.editItem")}: ${item.title}`}
+            title={tr("ui.editItem")}
           >
             <Pencil size={15} />
           </button>
@@ -343,8 +344,8 @@ const ItemRow = memo(function ItemRow({
             type="button"
             className="icon-button delete-action"
             onClick={() => onDelete(item.id)}
-            aria-label={`${tr("Удалить покупку")}: ${item.title}`}
-            title={tr("Удалить покупку")}
+            aria-label={`${tr("ui.deleteItem")}: ${item.title}`}
+            title={tr("ui.deleteItem")}
           >
             <Trash2 size={15} />
           </button>

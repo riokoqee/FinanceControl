@@ -1,3 +1,5 @@
+import type { MessageKey } from "../lib/messages";
+import { message } from "../lib/messages";
 import { memo, useId, useMemo, useState } from "react";
 import { convertAmount, formatMoney } from "../lib/finance";
 import type { Currency, ExchangeRates, Language, Transaction } from "../lib/finance";
@@ -21,7 +23,7 @@ export default memo(function ExpenseChart({
   language,
   rates,
 }: ExpenseChartProps) {
-  const tr = (text: string) => translate(language, text);
+  const tr = (text: MessageKey) => translate(language, text);
   const locale = language === "en" ? "en-US" : "ru-RU";
   const days = new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate();
   const today = useLocalCalendarDay();
@@ -66,15 +68,13 @@ export default memo(function ExpenseChart({
         <strong>{activeValue.money}</strong>
       </div>
       <p id={hintId} className="sr-only">
-        {language === "en"
-          ? "Use Left and Right arrow keys to choose a day, Home for the first day and End for the last day. You can also choose a day from the list below the chart."
-          : "Выбирайте день стрелками влево и вправо, Home — первый день, End — последний. Также можно выбрать день в списке под графиком."}
+        {message(language, "ui.useLeftAndRightArrowKeysToChooseADayHomeForTheFirstDayAndEndForTheLastDayYouCanAlsoChooseADayFromTheListBelowTheChart")}
       </p>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         tabIndex={0}
-        aria-label={`${tr("Расходы по дням,")} ${monthLabel}`}
+        aria-label={`${tr("ui.dailySpending")} ${monthLabel}`}
         aria-describedby={`${hintId} ${detailId}`}
         onMouseLeave={() => setHover(null)}
         onKeyDown={(event) => {
@@ -136,7 +136,7 @@ export default memo(function ExpenseChart({
         })}
       </svg>
       <label className="chart-selected-detail">
-        <span>{language === "en" ? "Day" : "День"}</span>
+        <span>{message(language, "ui.dayAlternative")}</span>
         <select value={selected} onChange={(event) => selectDay(Number(event.target.value))}>
           {values.map((value, index) => (
             <option key={value.date} value={index}>

@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Check, CircleDashed, Leaf, Minus, Snowflake } from "lucide-react";
+import { Check, Circle, CircleDashed, Leaf, Minus, Snowflake } from "lucide-react";
 import type { Language, Transaction } from "../lib/finance";
 import { getTrackingDays } from "../lib/streak/streakLedger";
 import type { StreakLedger, TrackingDayStatus } from "../lib/streak/streakTypes";
@@ -7,11 +7,11 @@ import { streakCopy } from "../lib/streak/streakCopy";
 import { useLocalCalendarDay } from "../hooks/useStreakStats";
 import "./StreakDays.css";
 
-const icons = { LOGGED: Check, NO_SPEND: Leaf, FROZEN: Snowflake, MISSED: Minus, PENDING: CircleDashed };
+const icons = { LOGGED: Check, NO_SPEND: Leaf, FROZEN: Snowflake, MISSED: Minus, PENDING: CircleDashed, NONE: Circle };
 
 export function trackingStatusLabel(status: TrackingDayStatus, language: Language): string {
   const t = streakCopy[language];
-  return { LOGGED: t.logged, NO_SPEND: t.noSpendDay, FROZEN: t.frozen, MISSED: t.missed, PENDING: t.pending }[status];
+  return { LOGGED: t.logged, NO_SPEND: t.noSpendDay, FROZEN: t.frozen, MISSED: t.missed, PENDING: t.pending, NONE: t.beforeTracking }[status];
 }
 
 export default memo(function StreakDays({
@@ -49,7 +49,7 @@ export default memo(function StreakDays({
   if (!selected) return null;
   const SelectedIcon = icons[selected.status];
   const canBackfill = selected.date !== today && selected.canConfirm;
-  const hasPurchases = transactions.some((transaction) => transaction.date === selected.date);
+  const hasPurchases = selected.confirmationStatus === "LOGGED";
   const selectedLabel = trackingStatusLabel(selected.status, language);
 
   return (

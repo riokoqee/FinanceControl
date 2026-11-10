@@ -1,3 +1,4 @@
+import type { MessageKey } from "../lib/messages";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { CircleHelp, Download, Search, X } from "lucide-react";
@@ -65,7 +66,7 @@ export default function TrackerPage({
   onExportCsv,
   onProfile,
 }: TrackerPageProps) {
-  const tr = (text: string) => translate(language, text);
+  const tr = (text: MessageKey) => translate(language, text);
   const filteredTotal = useMemo(
     () =>
       filtered.reduce(
@@ -80,13 +81,13 @@ export default function TrackerPage({
       <div className="tracker-summary">
         <div>
           <span>
-            {tr("Расходы")}{" "}
-            {allTime ? tr("за всё время") : tr("за выбранный месяц")}
+            {tr("ui.spending")}{" "}
+            {allTime ? tr("ui.ofAllTime") : tr("ui.forTheSelectedMonth")}
           </span>
           <strong>{formatMoney(filteredTotal, currency, language)}</strong>
         </div>
         <div>
-          <span>{tr("Количество записей")}</span>
+          <span>{tr("ui.numberOfRecords")}</span>
           <strong>{filtered.length}</strong>
         </div>
       </div>
@@ -98,15 +99,15 @@ export default function TrackerPage({
           <label className="search-field">
             <Search size={18} />
             <input
-              placeholder={tr("Найти покупку или заметку…")}
+              placeholder={tr("ui.findAPurchaseOrNote")}
               value={search}
               onChange={(e) => onSearch(e.target.value)}
-              aria-label={tr("Поиск расходов")}
+              aria-label={tr("ui.searchExpenses")}
             />
             {search && (
               <button
                 className="icon-button"
-                aria-label={tr("Очистить поиск")}
+                aria-label={tr("ui.clearSearch")}
                 onClick={() => onSearch("")}
               >
                 <X size={15} />
@@ -117,12 +118,12 @@ export default function TrackerPage({
             className="filter-select"
             value={category}
             onChange={(e) => onCategory(e.target.value)}
-            aria-label={tr("Фильтр по категории")}
+            aria-label={tr("ui.filterByCategory")}
           >
-            <option value="all">{tr("Все категории")}</option>
+            <option value="all">{tr("ui.allCategories")}</option>
             {CATEGORIES.map((c) => (
               <option key={c.id} value={c.id}>
-                {tr(c.label)}
+                {tr(c.labelKey)}
               </option>
             ))}
           </select>
@@ -130,9 +131,9 @@ export default function TrackerPage({
             className="filter-select"
             value={filterCurrency}
             onChange={(e) => onCurrencyFilter(e.target.value)}
-            aria-label={tr("Фильтр по валюте")}
+            aria-label={tr("ui.filterByCurrency")}
           >
-            <option value="all">{tr("Все валюты")}</option>
+            <option value="all">{tr("ui.allCurrencies")}</option>
             {CURRENCIES.map((c) => (
               <option key={c.code}>{c.code}</option>
             ))}
@@ -141,11 +142,11 @@ export default function TrackerPage({
             className="filter-select sort-select"
             value={sort}
             onChange={(e) => onSort(e.target.value)}
-            aria-label={tr("Сортировка расходов")}
+            aria-label={tr("ui.sortExpenses")}
           >
-            <option value="newest">{tr("Сначала новые")}</option>
-            <option value="oldest">{tr("Сначала старые")}</option>
-            <option value="largest">{tr("По сумме ↓")}</option>
+            <option value="newest">{tr("ui.newestFirst")}</option>
+            <option value="oldest">{tr("ui.oldestFirst")}</option>
+            <option value="largest">{tr("ui.amountAlternative")}</option>
           </select>
         </div>
         <div className="filter-summary">
@@ -155,7 +156,7 @@ export default function TrackerPage({
               checked={allTime}
               onChange={(e) => onAllTime(e.target.checked)}
             />
-            {tr("За всё время")}
+            {tr("ui.allTime")}
           </label>
         </div>
         {filtered.length ? (
@@ -175,14 +176,14 @@ export default function TrackerPage({
             <>
               <CircleHelp size={14} />
               <span>
-                {tr("Хранилище недоступно. Скачайте резервную копию.")}
+                {tr("ui.storageIsUnavailableDownloadABackup")}
               </span>
             </>
           )}
           <button className="inline-link" onClick={onExportCsv}><Download size={14} />CSV</button>
           <button className="inline-link" onClick={onExport} disabled={pdfBusy}>
             <Download size={14} />
-            {tr("Создать PDF")}
+            {tr("ui.createPdf")}
           </button>
         </div>
       </section>
