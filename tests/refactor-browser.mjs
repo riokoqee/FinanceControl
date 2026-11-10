@@ -194,6 +194,33 @@ try {
     assert.deepEqual(await read(page), saved);
   }, { data: manualData });
 
+  const russianProfile = seed();
+  russianProfile.profile.language = 'ru';
+  await check('restore and reset feedback follows the newly committed profile language', async (page) => {
+    const incoming = seed({ transactions: [expense({ id: 'restored', title: 'Restored journal' })] });
+    await page.locator('input[type="file"][accept*=".pdf"]').setInputFiles({
+      name: 'english-profile.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(incoming)),
+    });
+    await settle(page, '.import-actions');
+    await page.getByRole('button', { name: 'Восстановить всё', exact: true }).click();
+    await until(async () => assert.equal((await read(page)).profile.language, 'en'));
+    await until(async () => assert.equal(await page.locator('html').getAttribute('lang'), 'en'));
+    assert.match(await page.locator('.page-heading h1').innerText(), /My profile/);
+    assert.deepEqual((await read(page)).transactions, incoming.transactions);
+    const restoredToast = await page.locator('.toast > span').innerText();
+    await page.locator('.data-danger-zone button').click();
+    await settle(page, '.modal .dialog-footer');
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete all data', exact: true }).click();
+    await until(async () => assert.equal((await read(page)).profile.language, 'ru'));
+    await until(async () => assert.equal(await page.locator('html').getAttribute('lang'), 'ru'));
+    assert.match(await page.locator('.page-heading h1').innerText(), /Мой профиль/);
+    assert.deepEqual((await read(page)).transactions, []);
+    const resetToast = await page.locator('.toast > span').innerText();
+    assert.deepEqual({ restoredToast, resetToast }, {
+      restoredToast: 'Backup restored', resetToast: 'Данные удалены. Можно начать заново.',
+    });
+  }, { route: 'profile', data: russianProfile });
+
   await check('undo restores an expense without overwriting a newly edited shopping plan', async (page) => {
     await page.getByRole('button', { name: 'Delete Bread', exact: true }).click();
     await until(async () => assert.equal((await read(page)).transactions.length, 0));

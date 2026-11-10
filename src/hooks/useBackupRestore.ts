@@ -27,7 +27,6 @@ export function useBackupRestore({
 }: Options) {
   const [showDemoBanner, setShowDemoBanner] = useState(true);
   const { data, commit, setData } = store;
-  const language = data.profile.language;
   const transfer = useDataTransfer({
     data,
     language: data.profile.language,
@@ -50,15 +49,15 @@ export function useBackupRestore({
     if (dialogs.state.kind !== "import") return;
     const incoming = dialogs.state.data;
     feedback.setCelebration(null);
-    if (replaceAll) {
-      if (!commit(incoming, true)) return;
-      profile.setProfile(incoming.profile);
-    } else if (!setData((current) => mergeBackupData(current, incoming)))
-      return;
+    const saved = replaceAll
+      ? commit(incoming, true)
+      : setData((current) => mergeBackupData(current, incoming));
+    if (!saved) return;
+    if (replaceAll) profile.setProfile(saved.profile);
     dialogs.close();
     feedback.setToast({
       message: message(
-        language,
+        saved.profile.language,
         replaceAll
           ? "ui.backupRestored"
           : "ui.backupImportedDuplicatesWereSkipped",
@@ -76,13 +75,17 @@ export function useBackupRestore({
         language: data.profile.language,
       },
     };
-    if (!commit(next, true)) return;
-    profile.setProfile(next.profile);
+    const saved = commit(next, true);
+    if (!saved) return;
+    profile.setProfile(saved.profile);
     view.setMonth(currentMonth());
     dialogs.close();
     setShowDemoBanner(false);
     feedback.setToast({
-      message: message(language, "ui.demoLoadedYouCanEditOrDeleteAnyRecord"),
+      message: message(
+        saved.profile.language,
+        "ui.demoLoadedYouCanEditOrDeleteAnyRecord",
+      ),
     });
   }
   function startDemo() {
@@ -107,20 +110,27 @@ export function useBackupRestore({
   function confirmReplacement() {
     if (dialogs.state.kind !== "confirmation") return;
     if (dialogs.state.action === "recovery") {
-      if (!commit(data, true)) return;
+      const saved = commit(data, true);
+      if (!saved) return;
       dialogs.close();
-      feedback.setToast({ message: message(language, "ui.backupRestored") });
+      feedback.setToast({
+        message: message(saved.profile.language, "ui.backupRestored"),
+      });
     } else if (dialogs.state.action === "reset") {
       feedback.setCelebration(null);
       const empty = createEmptyData();
-      if (!commit(empty, true)) return;
-      profile.setProfile(empty.profile);
+      const saved = commit(empty, true);
+      if (!saved) return;
+      profile.setProfile(saved.profile);
       view.setMonth(currentMonth());
       view.resetFilters();
       setShowDemoBanner(true);
       dialogs.close();
       feedback.setToast({
-        message: message(language, "ui.dataDeletedYouCanStartFresh"),
+        message: message(
+          saved.profile.language,
+          "ui.dataDeletedYouCanStartFresh",
+        ),
       });
     } else applyDemo();
   }
