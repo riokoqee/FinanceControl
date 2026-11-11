@@ -204,7 +204,9 @@ try {
     await page.getByRole('button', { name: 'Check for updates', exact: true }).click();
     await page.locator('.pwa-settings').getByText('You have the latest version', { exact: true }).waitFor();
     await context.setOffline(true);
-    assert.equal(await page.getByRole('button', { name: 'Check for updates', exact: true }).isDisabled(), true);
+    await until(async () => assert.equal(
+      await page.getByRole('button', { name: 'Check for updates', exact: true }).isDisabled(), true),
+    'Offline connectivity must disable update checks after the browser event and React render');
     assert.equal(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).transactions.length, key), 1);
   });
   await check('waiting update preserves both old tabs, unsaved draft, old lazy modules and all unrelated data', async context => {
