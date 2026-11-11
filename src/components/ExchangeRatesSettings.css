@@ -6,3 +6,7 @@
 .exchange-rates-actions .button { min-height: 44px; white-space: normal; }
 .exchange-rates-error { color: var(--danger); font-size: 12px; }
 .exchange-rates-estimates { color: var(--text-muted); }
+.exchange-rate-mode { clear: both; margin-top: 16px; }
+.exchange-rate-provider { margin-top: 12px !important; }
+.exchange-rate-dates { display: grid; gap: 5px; margin-top: 12px; color: var(--text-secondary); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.exchange-rates-settings input[readonly] { color: var(--text-secondary); background: var(--bg); }

@@ -4,6 +4,9 @@ import "@fontsource-variable/manrope";
 import App from "./App";
 import "./styles.css";
 import "./motion.css";
+import { startPwa } from "./lib/pwaClient";
+
+startPwa();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

@@ -1,3 +1,4 @@
+import type { ExchangeRateSync } from "../lib/currency";
 import type { MessageKey } from "../lib/messages";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
@@ -8,8 +9,13 @@ import {
   convertAmount,
   formatMoney,
 } from "../lib/finance";
-import type { Currency, ExchangeRates, Language, Transaction } from "../lib/finance";
-import { currencyCopy, getRateLabel } from "../lib/currency";
+import type {
+  Currency,
+  ExchangeRates,
+  Language,
+  Transaction,
+} from "../lib/finance";
+import { getRateSourceLabel, getRateLabel } from "../lib/currency";
 import { translate } from "../lib/i18n";
 import TransactionTable from "../components/TransactionTable";
 interface TrackerPageProps {
@@ -17,6 +23,7 @@ interface TrackerPageProps {
   language: Language;
   currency: Currency;
   rates?: ExchangeRates;
+  sync?: ExchangeRateSync;
   search: string;
   category: string;
   filterCurrency: string;
@@ -44,6 +51,7 @@ export default function TrackerPage({
   language,
   currency,
   rates,
+  sync,
   search,
   category,
   filterCurrency,
@@ -175,12 +183,13 @@ export default function TrackerPage({
           {!storageOk && (
             <>
               <CircleHelp size={14} />
-              <span>
-                {tr("ui.storageIsUnavailableDownloadABackup")}
-              </span>
+              <span>{tr("ui.storageIsUnavailableDownloadABackup")}</span>
             </>
           )}
-          <button className="inline-link" onClick={onExportCsv}><Download size={14} />CSV</button>
+          <button className="inline-link" onClick={onExportCsv}>
+            <Download size={14} />
+            CSV
+          </button>
           <button className="inline-link" onClick={onExport} disabled={pdfBusy}>
             <Download size={14} />
             {tr("ui.createPdf")}
@@ -190,11 +199,11 @@ export default function TrackerPage({
       <p className="workspace-footnote">
         <button
           className="inline-link"
-          title={getRateLabel(rates, language)}
+          title={getRateLabel(rates, language, sync)}
           onClick={onProfile}
         >
           <CircleHelp size={13} />
-          {currencyCopy[language][rates ? "manual" : "estimate"]}
+          {getRateSourceLabel(rates, language, sync)}
         </button>
       </p>
     </>

@@ -1,7 +1,12 @@
 import { LocalizedError, localizeError } from "../lib/localizedError";
 import { message } from "../lib/messages";
 import { useEffect } from "react";
-import type { CategoryBudget, Currency, ExchangeRates } from "../lib/finance";
+import type {
+  CategoryBudget,
+  Currency,
+  ExchangeRates,
+  ExchangeRateSync,
+} from "../lib/finance";
 import { MAX_AMOUNT, convertAmount } from "../lib/finance";
 import {
   mergeCategoryBudgetsDraft,
@@ -9,6 +14,7 @@ import {
 } from "../lib/storage/storage";
 import { settingsCopy } from "../lib/settingsCopy";
 import { useProfileDraft } from "./useProfileDraft";
+import { useAutomaticRates } from "./useAutomaticRates";
 import type { AppDataController } from "./useAppData";
 import type { DialogController } from "./useDialogState";
 import type { AppFeedback } from "./useAppFeedback";
@@ -22,6 +28,7 @@ export function useProfileSettings(
 ) {
   const { data, setData } = store;
   const language = data.profile.language;
+  const automaticRates = useAutomaticRates(store);
   const draft = useProfileDraft(
     data.profile,
     page === "profile",
@@ -60,15 +67,30 @@ export function useProfileSettings(
   function saveExchangeRates(
     base: ExchangeRates | undefined,
     next: ExchangeRates,
+    baseSync?: ExchangeRateSync,
   ): boolean {
     const saved = setData((current) => {
-      const { exchangeRates: _rates, ...originalProfile } = current.profile;
+      const {
+        exchangeRates: _rates,
+        exchangeRateSync: _sync,
+        ...originalProfile
+      } = current.profile;
       return {
         ...current,
         profile: mergeProfileDraft(
-          { ...originalProfile, ...(base ? { exchangeRates: base } : {}) },
+          {
+            ...originalProfile,
+            ...(base ? { exchangeRates: base } : {}),
+            ...(baseSync ? { exchangeRateSync: baseSync } : {}),
+          },
           current.profile,
-          { ...current.profile, exchangeRates: next },
+          {
+            ...current.profile,
+            exchangeRates: next,
+            ...(baseSync
+              ? { exchangeRateSync: { mode: "manual" } as const }
+              : {}),
+          },
         ),
       };
     });
@@ -141,6 +163,7 @@ export function useProfileSettings(
     initials,
     updateCurrency,
     saveExchangeRates,
+    automaticRates,
     saveCategoryBudgets,
     saveAvatar,
     toggleTheme,

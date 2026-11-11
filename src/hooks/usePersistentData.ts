@@ -8,7 +8,10 @@ import {
   commitStoredOperation,
   readStoredData,
 } from "../lib/storage/storage";
-import type { StoredOperation, StoredOperationResult } from "../lib/storage/storage";
+import type {
+  StoredOperation,
+  StoredOperationResult,
+} from "../lib/storage/storage";
 
 type Change = AppData | ((current: AppData) => AppData);
 
@@ -17,11 +20,15 @@ export function usePersistentData() {
   const [initial] = useState(() => readStoredData());
   const [data, renderData] = useState(initial.data);
   const current = useRef(data);
+  // Explicit full replacement invalidates asynchronous work even for equal snapshots.
+  const replacementEpoch = useRef(0);
   const [status, setStatus] = useState(initial.status);
   const [error, setError] = useState("");
   const lastError = useRef("");
   const persist = useCallback(
-    <R,>(write: (base: AppData) => StoredOperationResult<R>): StoredOperationResult<R> | null => {
+    <R>(
+      write: (base: AppData) => StoredOperationResult<R>,
+    ): StoredOperationResult<R> | null => {
       try {
         const committed = write(current.current);
         const next = committed.data;
@@ -33,8 +40,11 @@ export function usePersistentData() {
         lastError.current = "";
         return committed;
       } catch (cause) {
-        lastError.current =
-          localizeError(current.current.profile.language, cause, "error.saveFailed");
+        lastError.current = localizeError(
+          current.current.profile.language,
+          cause,
+          "error.saveFailed",
+        );
         setError(lastError.current);
         return null;
       }
@@ -42,20 +52,29 @@ export function usePersistentData() {
     [],
   );
   const commit = useCallback(
-    (change: Change, replaceCorrupt = false) =>
-      persist((base) => {
+    (change: Change, replaceCorrupt = false) => {
+      const saved = persist((base) => {
         const desired = typeof change === "function" ? change(base) : change;
-        return { data: commitStoredData(base, desired, undefined, { replaceCorrupt }), result: undefined };
-      })?.data ?? null,
+        return {
+          data: commitStoredData(base, desired, undefined, { replaceCorrupt }),
+          result: undefined,
+        };
+      });
+      if (saved && replaceCorrupt) replacementEpoch.current += 1;
+      return saved?.data ?? null;
+    },
     [persist],
   );
   const commitFresh = useCallback(
     (change: (current: AppData) => AppData) =>
-      persist((base) => ({ data: commitStoredMutation(base, change), result: undefined }))?.data ?? null,
+      persist((base) => ({
+        data: commitStoredMutation(base, change),
+        result: undefined,
+      }))?.data ?? null,
     [persist],
   );
   const commitOperation = useCallback(
-    <R,>(operation: StoredOperation<R>): StoredOperationResult<R> | null =>
+    <R>(operation: StoredOperation<R>): StoredOperationResult<R> | null =>
       persist((base) => commitStoredOperation(base, operation)),
     [persist],
   );
@@ -72,5 +91,15 @@ export function usePersistentData() {
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
   }, []);
-  return { data, current, commit, commitFresh, commitOperation, status, error, lastError };
+  return {
+    data,
+    current,
+    replacementEpoch,
+    commit,
+    commitFresh,
+    commitOperation,
+    status,
+    error,
+    lastError,
+  };
 }

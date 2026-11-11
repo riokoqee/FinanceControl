@@ -1,3 +1,5 @@
+import type { ProfileSettings } from "../hooks/useProfileSettings";
+import PwaSettings from "../components/PwaSettings";
 import type { MessageKey } from "../lib/messages";
 import { useMemo, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
@@ -17,7 +19,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { CURRENCIES } from "../lib/finance";
-import type { AppData, Currency, ExchangeRates, Language, Profile } from "../lib/finance";
+import type { AppData, Currency, Language, Profile } from "../lib/finance";
 import { translate } from "../lib/i18n";
 import ExchangeRatesSettings from "../components/ExchangeRatesSettings";
 import { settingsCopy } from "../lib/settingsCopy";
@@ -44,7 +46,8 @@ interface ProfilePageProps {
   onCurrencyChange: (currency: Currency) => void;
   onThemeChange: (theme: Profile["theme"]) => void;
   onLanguageChange: (language: Language) => void;
-  onExchangeRatesSave: (base: ExchangeRates | undefined, next: ExchangeRates) => boolean;
+  onExchangeRatesSave: ProfileSettings["saveExchangeRates"];
+  automaticRates: ProfileSettings["automaticRates"];
   onExportJson: () => void;
   onExportCsv: () => void;
   onExport: () => void;
@@ -75,6 +78,7 @@ export default function ProfilePage({
   onThemeChange,
   onLanguageChange,
   onExchangeRatesSave,
+  automaticRates,
   onExportJson,
   onExportCsv,
   onExport,
@@ -235,7 +239,9 @@ export default function ProfilePage({
               </select>
             </label>
             <label className="field">
-              <span className="field-label">{tr("ui.monthlyBudgetAlternative")}</span>
+              <span className="field-label">
+                {tr("ui.monthlyBudgetAlternative")}
+              </span>
               <div className="input-prefix">
                 <input
                   className="form-input"
@@ -259,7 +265,13 @@ export default function ProfilePage({
               </span>
             </label>
           </div>
-          <ExchangeRatesSettings rates={data.profile.exchangeRates} language={language} onSave={onExchangeRatesSave} />
+          <ExchangeRatesSettings
+            rates={data.profile.exchangeRates}
+            sync={data.profile.exchangeRateSync}
+            automatic={automaticRates}
+            language={language}
+            onSave={onExchangeRatesSave}
+          />
         </div>
         <div className="settings-group">
           <h3>{tr("ui.appearance")}</h3>
@@ -308,9 +320,7 @@ export default function ProfilePage({
         </div>
         <div className="profile-save">
           {storageError && (
-            <Button onClick={onReload}>
-              {tr("ui.loadCurrentProfile")}
-            </Button>
+            <Button onClick={onReload}>{tr("ui.loadCurrentProfile")}</Button>
           )}
           <span>
             <ShieldCheck size={14} />
@@ -323,6 +333,7 @@ export default function ProfilePage({
         </div>
       </form>
       <div className="profile-right">
+        <PwaSettings language={language} />
         <section className="panel storage-card">
           <div className="storage-illustration">
             <ShieldCheck size={32} strokeWidth={1.3} />
@@ -330,9 +341,7 @@ export default function ProfilePage({
             <span className="storage-orbit orbit-two" />
           </div>
           <h2>{tr("ui.data")}</h2>
-          <p>
-            {settingsCopy[language].localData}
-          </p>
+          <p>{settingsCopy[language].localData}</p>
           <div className="storage-details">
             <div>
               <span>{tr("ui.totalRecords")}</span>
@@ -356,8 +365,14 @@ export default function ProfilePage({
               <Download size={16} />
               {tr("ui.pdfBackupWithAllYourData")}
             </Button>
-            <Button onClick={onExportJson}><Download size={16} />{settingsCopy[language].jsonBackup}</Button>
-            <Button onClick={onExportCsv}><Download size={16} />{settingsCopy[language].csvReport}</Button>
+            <Button onClick={onExportJson}>
+              <Download size={16} />
+              {settingsCopy[language].jsonBackup}
+            </Button>
+            <Button onClick={onExportCsv}>
+              <Download size={16} />
+              {settingsCopy[language].csvReport}
+            </Button>
             <Button onClick={() => importRef.current?.click()}>
               <Upload size={16} />
               {tr("ui.importPdfBackup")}
@@ -393,9 +408,7 @@ export default function ProfilePage({
             <Trash2 size={15} />
             {tr("ui.deleteAllData")}
           </button>
-          <p>
-            {tr("ui.deletesAllBelilogDataFromThisBrowser")}
-          </p>
+          <p>{tr("ui.deletesAllBelilogDataFromThisBrowser")}</p>
         </div>
       </div>
       <StreakBounty
@@ -409,7 +422,11 @@ export default function ProfilePage({
         onNoSpend={onNoSpend}
         onConfirmDay={onConfirmDay}
       />
-      <ActivityCalendar transactions={data.transactions} ledger={data.streak} language={language} />
+      <ActivityCalendar
+        transactions={data.transactions}
+        ledger={data.streak}
+        language={language}
+      />
     </div>
   );
 }

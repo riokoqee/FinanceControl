@@ -13,10 +13,13 @@ On **9 November 2026**, the project owner confirmed in the project discussion th
 | `assets/Iconic Red-Banded Straw Hat.png`, `public/straw-hat.png` | Identical SHA-256; 1536×1024 PNG. The project history describes the artwork as supplied in `assets/`. | Original creator, source URL and artwork license are not recorded. No author/license text was found in PNG text chunks. |
 | `assets/belilog-strawhat-logo.png` | Prepared 1038×1038 PNG, introduced with the BeliLog artwork. | No separate origin or license record. |
 | `assets/belilog-icon-512.png`, `public/belilog-icon-512.png` | Identical SHA-256; prepared 512×512 PNG used by the current brand and posters. | No separate origin or license record. |
+| `public/belilog-icon-192.png` | 192×192 PWA icon derived from the existing 512×512 brand icon. | Same artwork provenance as the source icon; no new license inferred. |
 | `assets/belilog-favicon.ico`, `public/favicon.ico` | Identical SHA-256; 16/32/48/64px icon variants, used by the browser. | No separate origin or license record. |
 | `public/favicon.svg` | SVG paths defined in the repository; the current HTML selects the ICO instead. | No separate upstream attribution or artwork license found. |
 
 The table describes the available file metadata alongside the owner's confirmation above. No replacement artist, source URL or artwork license has been inferred.
+
+MIT applies to the application source; it does not provide a separate license for the hat illustration or third-party franchise names and imagery. The owner's confirmation does not replace the missing provenance details listed here.
 
 ### Fonts and interface icons
 
@@ -47,6 +50,10 @@ The three images in `docs/screenshots/` are Playwright captures of the actual ap
 `assets/Iconic Red-Banded Straw Hat.png` и `public/straw-hat.png` совпадают побайтно. История проекта описывает изображение как предоставленное в папке `assets/`, но автор, ссылка на источник и лицензия иллюстрации не записаны. Текстовых PNG-метаданных с автором или лицензией не найдено.
 
 Для подготовленных `belilog-strawhat-logo.png`, PNG-иконки 512×512 и ICO также нет отдельной записи о происхождении или условиях использования. Копии PNG/ICO в `assets/` и `public/` совпадают. `public/favicon.svg` содержит SVG-контуры в исходниках; действующий HTML подключает ICO. Источник или отдельная лицензия SVG не указаны.
+
+Иконка PWA `public/belilog-icon-192.png` получена из существующей иконки 512×512. Для неё действуют те же сведения о происхождении; новая лицензия не предполагается.
+
+MIT относится к исходному коду приложения; она не предоставляет отдельную лицензию на иллюстрацию шляпы, названия и образы сторонней франшизы. Подтверждение владельца не заменяет отсутствующие сведения о происхождении, перечисленные здесь.
 
 ### Шрифты и иконки
 

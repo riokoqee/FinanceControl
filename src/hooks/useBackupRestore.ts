@@ -100,7 +100,8 @@ export function useBackupRestore({
       data.profile.avatar ||
       data.profile.monthlyBudget ||
       data.profile.currency !== "USD" ||
-      data.profile.exchangeRates
+      data.profile.exchangeRates ||
+      data.profile.exchangeRateSync
     ) {
       dialogs.confirm("demo");
       return;

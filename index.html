@@ -12,7 +12,7 @@
           const readTheme = (raw) => {
             const data = JSON.parse(raw);
             const value = data?.profile?.theme;
-            return (data?.version === 1 || data?.version === 2 || data?.version === 3 || data?.version === 4) &&
+            return (data?.version === 1 || data?.version === 2 || data?.version === 3 || data?.version === 4 || data?.version === 5) &&
               (value === 'light' || value === 'dark' || value === 'system') ? value : undefined;
           };
           const raw = localStorage.getItem('finance-control:data:v1');
@@ -30,7 +30,10 @@
       content="BeliLog (ベリログ) — Every Berry Counts. Личный журнал расходов. Записывайте покупки, следите за бюджетом и понимайте свои привычки. Данные сохраняются на вашем устройстве."
     />
     <link rel="icon" type="image/x-icon" href="%BASE_URL%favicon.ico" sizes="any" />
-    <link rel="apple-touch-icon" href="%BASE_URL%belilog-icon-512.png" />
+    <link rel="apple-touch-icon" href="%BASE_URL%belilog-icon-192.png" />
+    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>BeliLog (ベリログ) — Every Berry Counts.</title>
   </head>
   <body>

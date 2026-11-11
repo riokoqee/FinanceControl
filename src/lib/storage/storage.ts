@@ -8,24 +8,32 @@ import {
   type CategoryBudget,
   type Profile,
   type Transaction,
-} from '../finance';
-import { isStreakLedger, mergeStreakLedgers } from '../streak/streakTypes';
-import { withCanonicalVersion } from '../appDataVersion';
+} from "../finance";
+import { isStreakLedger, mergeStreakLedgers } from "../streak/streakTypes";
+import { withCanonicalVersion } from "../appDataVersion";
 
-export { parseMoney } from '../finance';
+export { parseMoney } from "../finance";
 
 export const LAST_GOOD_KEY = `${STORAGE_KEY}:last-good`;
 export const CORRUPT_KEY = `${STORAGE_KEY}:recovery`;
 
-type StorageAdapter = Pick<Storage, 'getItem' | 'setItem'>;
+type StorageAdapter = Pick<Storage, "getItem" | "setItem">;
 type WriteOptions = { replaceCorrupt?: boolean };
 
 // Strings are immutable: unlike an AppData identity, this cannot become stale when
 // a caller edits its input. Keep only one value per adapter to bound retained data.
-const checkedPrimary = new WeakMap<StorageAdapter, { raw: string; valid: boolean }>();
+const checkedPrimary = new WeakMap<
+  StorageAdapter,
+  { raw: string; valid: boolean }
+>();
 
 class StorageChangedError extends Error {}
-export type StorageStatus = 'ready' | 'empty' | 'recovered' | 'corrupt' | 'unavailable';
+export type StorageStatus =
+  | "ready"
+  | "empty"
+  | "recovered"
+  | "corrupt"
+  | "unavailable";
 export interface StoredData {
   data: AppData;
   status: StorageStatus;
@@ -43,15 +51,17 @@ export type StoredOperation<R> = (current: AppData) => StoredOperationResult<R>;
 
 export class StorageRecoveryError extends LocalizedError {
   constructor() {
-    super("ui.savedDataIsDamagedTheOriginalCopyIsPreservedRestoreABackupOrConfirmAReset");
-    this.name = 'StorageRecoveryError';
+    super(
+      "ui.savedDataIsDamagedTheOriginalCopyIsPreservedRestoreABackupOrConfirmAReset",
+    );
+    this.name = "StorageRecoveryError";
   }
 }
 
 export class DataConflictError extends LocalizedError {
   constructor() {
     super("ui.dataChangedInAnotherTabLoadTheCurrentEntryAndTryAgain");
-    this.name = 'DataConflictError';
+    this.name = "DataConflictError";
   }
 }
 
@@ -65,41 +75,49 @@ function checkPrimary(source: StorageAdapter, raw: string): boolean {
   const previous = checkedPrimary.get(source);
   if (previous?.raw === raw) return previous.valid;
   let valid = true;
-  try { validateBackup(raw); } catch { valid = false; }
+  try {
+    validateBackup(raw);
+  } catch {
+    valid = false;
+  }
   checkedPrimary.set(source, { raw, valid });
   return valid;
 }
 
 function readSnapshot(source: StorageAdapter, raw: string | null): StoredData {
-  if (raw === null) return { data: createEmptyData(), status: 'empty' };
+  if (raw === null) return { data: createEmptyData(), status: "empty" };
   try {
     const data = validateBackup(raw);
     checkedPrimary.set(source, { raw, valid: true });
-    return { data, status: 'ready' };
+    return { data, status: "ready" };
   } catch {
     checkedPrimary.set(source, { raw, valid: false });
     try {
       const previous = source.getItem(LAST_GOOD_KEY);
-      if (previous !== null) return { data: validateBackup(previous), status: 'recovered', raw };
+      if (previous !== null)
+        return { data: validateBackup(previous), status: "recovered", raw };
     } catch {
       // Keep the original primary value intact even if the secondary copy is unusable.
     }
-    return { data: createEmptyData(), status: 'corrupt', raw };
+    return { data: createEmptyData(), status: "corrupt", raw };
   }
 }
 
 /** Reading is deliberately side-effect free, even when a backup can be recovered. */
-export function readStoredData(storage?: StorageAdapter, previous?: AppData): StoredData {
+export function readStoredData(
+  storage?: StorageAdapter,
+  previous?: AppData,
+): StoredData {
   let source: StorageAdapter;
   let raw: string | null;
   try {
     source = browserStorage(storage);
     raw = source.getItem(STORAGE_KEY);
   } catch {
-    return { data: createEmptyData(), status: 'unavailable' };
+    return { data: createEmptyData(), status: "unavailable" };
   }
   const stored = readSnapshot(source, raw);
-  return previous && (stored.status === 'ready' || stored.status === 'empty')
+  return previous && (stored.status === "ready" || stored.status === "empty")
     ? { ...stored, data: shareUnchanged(previous, stored.data) }
     : stored;
 }
@@ -113,7 +131,8 @@ function writePrepared(
 ): void {
   // Object validation does not apply the string import limit. A saved payload
   // must also remain readable by the same validator after a browser restart.
-  if (serialized.length > MAX_BACKUP_LENGTH) throw new LocalizedError("ui.theBackupFileIsTooLarge");
+  if (serialized.length > MAX_BACKUP_LENGTH)
+    throw new LocalizedError("ui.theBackupFileIsTooLarge");
   const raw = destination.getItem(STORAGE_KEY);
   if (expected && raw !== expected.raw) throw new StorageChangedError();
   const corrupt = raw !== null && !checkPrimary(destination, raw);
@@ -144,15 +163,29 @@ export function writeStoredData(
 function same(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (Array.isArray(a) && Array.isArray(b)) {
-    return a.length === b.length && a.every((value, index) => same(value, b[index]));
+    return (
+      a.length === b.length && a.every((value, index) => same(value, b[index]))
+    );
   }
-  if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object') {
+  if (
+    a !== null &&
+    b !== null &&
+    typeof a === "object" &&
+    typeof b === "object"
+  ) {
     const left = Object.keys(a);
     const right = Object.keys(b);
-    return left.length === right.length && left.every((key) => (
-      Object.prototype.hasOwnProperty.call(b, key) &&
-      same((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])
-    ));
+    return (
+      left.length === right.length &&
+      left.every(
+        (key) =>
+          Object.prototype.hasOwnProperty.call(b, key) &&
+          same(
+            (a as Record<string, unknown>)[key],
+            (b as Record<string, unknown>)[key],
+          ),
+      )
+    );
   }
   return false;
 }
@@ -166,15 +199,37 @@ function mergeFields<T extends object>(base: T, current: T, desired: T): T {
   const keys = new Set([...Object.keys(original), ...Object.keys(local)]);
   for (const key of keys) {
     if (same(local[key], original[key])) continue;
-    if (!same(remote[key], original[key]) && !same(remote[key], local[key])) throw new DataConflictError();
+    if (!same(remote[key], original[key]) && !same(remote[key], local[key]))
+      throw new DataConflictError();
     if (local[key] === undefined) delete result[key];
     else result[key] = local[key];
   }
   return result as T;
 }
 
+/** The numeric rates and their provenance/policy must never be merged separately. */
+function mergeProfileFields(
+  base: Profile,
+  current: Profile,
+  desired: Profile,
+): Profile {
+  const snapshot = (profile: Profile) => ({
+    rates: profile.exchangeRates,
+    sync: profile.exchangeRateSync,
+  });
+  const original = snapshot(base);
+  const local = snapshot(desired);
+  const remote = snapshot(current);
+  if (!same(local, original) && !same(remote, original) && !same(local, remote))
+    throw new DataConflictError();
+  return mergeFields(base, current, desired);
+}
+
 function mergeRecords<T extends { id: string }>(
-  base: T[], current: T[], desired: T[], options: { atomic?: boolean } = {},
+  base: T[],
+  current: T[],
+  desired: T[],
+  options: { atomic?: boolean } = {},
 ): T[] {
   const originals = new Map(base.map((record) => [record.id, record]));
   const locals = new Map(desired.map((record) => [record.id, record]));
@@ -191,7 +246,12 @@ function mergeRecords<T extends { id: string }>(
     } else {
       // Amount and currency are one value: independently merging these fields
       // could silently turn an intended EUR limit into the same number in USD.
-      if (options.atomic && !same(local, original) && !same(remote, original) && !same(remote, local)) {
+      if (
+        options.atomic &&
+        !same(local, original) &&
+        !same(remote, original) &&
+        !same(remote, local)
+      ) {
         throw new DataConflictError();
       }
       result.push(mergeFields(original, remote, local));
@@ -210,19 +270,36 @@ function mergeRecords<T extends { id: string }>(
 /** Ordinary edits only add/upgrade facts; their removal identifies a replacement. */
 function streakWasReplaced(original: AppData, current: AppData): boolean {
   if (original.streak === undefined) return false;
-  if (current.streak === undefined || current.streak.startedOn > original.streak.startedOn) return true;
-  const days = new Map(current.streak.confirmedDays.map((entry) => [entry.date, entry.status]));
+  if (
+    current.streak === undefined ||
+    current.streak.startedOn > original.streak.startedOn
+  )
+    return true;
+  const days = new Map(
+    current.streak.confirmedDays.map((entry) => [entry.date, entry.status]),
+  );
   return original.streak.confirmedDays.some((entry) => {
     const status = days.get(entry.date);
-    return status === undefined || (entry.status === 'LOGGED' && status !== 'LOGGED');
+    return (
+      status === undefined || (entry.status === "LOGGED" && status !== "LOGGED")
+    );
   });
 }
 
 /** Merge against the latest persisted snapshot instead of overwriting another tab. */
-export function mergeAppData(base: AppData, current: AppData, desired: AppData): AppData {
+export function mergeAppData(
+  base: AppData,
+  current: AppData,
+  desired: AppData,
+): AppData {
   const original = validateBackup(base);
   const remote = current === base ? original : validateBackup(current);
-  const local = desired === base ? original : desired === current ? remote : validateBackup(desired);
+  const local =
+    desired === base
+      ? original
+      : desired === current
+        ? remote
+        : validateBackup(desired);
   // Identity is used only within this synchronous call, after validation. It is
   // never cached or trusted by a later call with a potentially edited object.
   if (desired === base || desired === current) return remote;
@@ -232,21 +309,55 @@ export function mergeAppData(base: AppData, current: AppData, desired: AppData):
     if (same(original, local)) return remote;
     throw new DataConflictError();
   }
-  const shoppingList = mergeRecords(original.shoppingList ?? [], remote.shoppingList ?? [], local.shoppingList ?? []);
-  const categoryBudgets = mergeRecords(original.categoryBudgets ?? [], remote.categoryBudgets ?? [], local.categoryBudgets ?? [], { atomic: true });
-  const shoppingTemplates = mergeRecords(original.shoppingTemplates ?? [], remote.shoppingTemplates ?? [], local.shoppingTemplates ?? []);
+  const shoppingList = mergeRecords(
+    original.shoppingList ?? [],
+    remote.shoppingList ?? [],
+    local.shoppingList ?? [],
+  );
+  const categoryBudgets = mergeRecords(
+    original.categoryBudgets ?? [],
+    remote.categoryBudgets ?? [],
+    local.categoryBudgets ?? [],
+    { atomic: true },
+  );
+  const shoppingTemplates = mergeRecords(
+    original.shoppingTemplates ?? [],
+    remote.shoppingTemplates ?? [],
+    local.shoppingTemplates ?? [],
+  );
   // A confirmation is an immutable daily fact, so a stale tab may add facts but
   // cannot erase another tab's day or duplicate derived freeze/reward credits.
   const streak = mergeStreakLedgers(
-    mergeStreakLedgers(original.streak, remote.streak), local.streak,
+    mergeStreakLedgers(original.streak, remote.streak),
+    local.streak,
   );
   return validateBackup({
     version: Math.max(original.version, remote.version, local.version),
-    profile: mergeFields(original.profile, remote.profile, local.profile),
-    transactions: mergeRecords(original.transactions, remote.transactions, local.transactions),
-    ...([original, remote, local].some((data) => data.shoppingList !== undefined) ? { shoppingList } : {}),
-    ...([original, remote, local].some((data) => data.categoryBudgets !== undefined) ? { categoryBudgets } : {}),
-    ...([original, remote, local].some((data) => data.shoppingTemplates !== undefined) ? { shoppingTemplates } : {}),
+    profile: mergeProfileFields(
+      original.profile,
+      remote.profile,
+      local.profile,
+    ),
+    transactions: mergeRecords(
+      original.transactions,
+      remote.transactions,
+      local.transactions,
+    ),
+    ...([original, remote, local].some(
+      (data) => data.shoppingList !== undefined,
+    )
+      ? { shoppingList }
+      : {}),
+    ...([original, remote, local].some(
+      (data) => data.categoryBudgets !== undefined,
+    )
+      ? { categoryBudgets }
+      : {}),
+    ...([original, remote, local].some(
+      (data) => data.shoppingTemplates !== undefined,
+    )
+      ? { shoppingTemplates }
+      : {}),
     ...(streak !== undefined ? { streak } : {}),
   });
 }
@@ -264,33 +375,58 @@ function shareRecords<T extends { id: string }>(previous: T[], next: T[]): T[] {
 function shareUnchanged(previous: AppData, next: AppData): AppData {
   return {
     ...next,
-    profile: same(previous.profile, next.profile) ? previous.profile : next.profile,
+    profile: same(previous.profile, next.profile)
+      ? previous.profile
+      : next.profile,
     transactions: shareRecords(previous.transactions, next.transactions),
-    ...(next.shoppingList !== undefined ? {
-      shoppingList: previous.shoppingList === undefined
-        ? next.shoppingList
-        : shareRecords(previous.shoppingList, next.shoppingList),
-    } : {}),
-    ...(next.categoryBudgets !== undefined ? {
-      categoryBudgets: previous.categoryBudgets === undefined
-        ? next.categoryBudgets
-        : shareRecords(previous.categoryBudgets, next.categoryBudgets),
-    } : {}),
-    ...(next.shoppingTemplates !== undefined ? {
-      shoppingTemplates: previous.shoppingTemplates === undefined
-        ? next.shoppingTemplates
-        : shareRecords(previous.shoppingTemplates, next.shoppingTemplates),
-    } : {}),
-    ...(next.streak !== undefined ? {
-      streak: previous.streak !== undefined && same(previous.streak, next.streak)
-        ? previous.streak : next.streak,
-    } : {}),
+    ...(next.shoppingList !== undefined
+      ? {
+          shoppingList:
+            previous.shoppingList === undefined
+              ? next.shoppingList
+              : shareRecords(previous.shoppingList, next.shoppingList),
+        }
+      : {}),
+    ...(next.categoryBudgets !== undefined
+      ? {
+          categoryBudgets:
+            previous.categoryBudgets === undefined
+              ? next.categoryBudgets
+              : shareRecords(previous.categoryBudgets, next.categoryBudgets),
+        }
+      : {}),
+    ...(next.shoppingTemplates !== undefined
+      ? {
+          shoppingTemplates:
+            previous.shoppingTemplates === undefined
+              ? next.shoppingTemplates
+              : shareRecords(
+                  previous.shoppingTemplates,
+                  next.shoppingTemplates,
+                ),
+        }
+      : {}),
+    ...(next.streak !== undefined
+      ? {
+          streak:
+            previous.streak !== undefined && same(previous.streak, next.streak)
+              ? previous.streak
+              : next.streak,
+        }
+      : {}),
   };
 }
 
 /** Match mergeRecords ordering: surviving current records, then local additions. */
-function retainRecordOrder<T extends { id: string }>(previous: T[], next: T[]): T[] {
-  if (previous.length === next.length && previous.every((record, index) => record.id === next[index].id)) return next;
+function retainRecordOrder<T extends { id: string }>(
+  previous: T[],
+  next: T[],
+): T[] {
+  if (
+    previous.length === next.length &&
+    previous.every((record, index) => record.id === next[index].id)
+  )
+    return next;
   const remaining = new Map(next.map((record) => [record.id, record]));
   const result: T[] = [];
   for (const record of previous) {
@@ -308,7 +444,8 @@ function retainRecordOrder<T extends { id: string }>(previous: T[], next: T[]): 
 function retainConfirmedDays(previous: AppData, candidate: AppData): AppData {
   if (previous.streak === undefined) return candidate;
   const streak = mergeStreakLedgers(previous.streak, candidate.streak);
-  if (!isStreakLedger(streak)) throw new LocalizedError("ui.theBackupContainsInvalidCheckInHistory");
+  if (!isStreakLedger(streak))
+    throw new LocalizedError("ui.theBackupContainsInvalidCheckInHistory");
   return withCanonicalVersion({ ...candidate, streak });
 }
 
@@ -333,20 +470,42 @@ export function commitStoredData(
       const candidate = retainConfirmedDays(base, validateBackup(desired));
       next = {
         ...candidate,
-        transactions: retainRecordOrder(base.transactions, candidate.transactions),
-        ...(base.shoppingList !== undefined || candidate.shoppingList !== undefined ? {
-          shoppingList: retainRecordOrder(base.shoppingList ?? [], candidate.shoppingList ?? []),
-        } : {}),
-        ...(base.categoryBudgets !== undefined || candidate.categoryBudgets !== undefined ? {
-          categoryBudgets: retainRecordOrder(base.categoryBudgets ?? [], candidate.categoryBudgets ?? []),
-        } : {}),
-        ...(base.shoppingTemplates !== undefined || candidate.shoppingTemplates !== undefined ? {
-          shoppingTemplates: retainRecordOrder(base.shoppingTemplates ?? [], candidate.shoppingTemplates ?? []),
-        } : {}),
+        transactions: retainRecordOrder(
+          base.transactions,
+          candidate.transactions,
+        ),
+        ...(base.shoppingList !== undefined ||
+        candidate.shoppingList !== undefined
+          ? {
+              shoppingList: retainRecordOrder(
+                base.shoppingList ?? [],
+                candidate.shoppingList ?? [],
+              ),
+            }
+          : {}),
+        ...(base.categoryBudgets !== undefined ||
+        candidate.categoryBudgets !== undefined
+          ? {
+              categoryBudgets: retainRecordOrder(
+                base.categoryBudgets ?? [],
+                candidate.categoryBudgets ?? [],
+              ),
+            }
+          : {}),
+        ...(base.shoppingTemplates !== undefined ||
+        candidate.shoppingTemplates !== undefined
+          ? {
+              shoppingTemplates: retainRecordOrder(
+                base.shoppingTemplates ?? [],
+                candidate.shoppingTemplates ?? [],
+              ),
+            }
+          : {}),
       };
     } else {
       const stored = readSnapshot(destination, raw);
-      if (stored.status === 'corrupt' || stored.status === 'recovered') throw new StorageRecoveryError();
+      if (stored.status === "corrupt" || stored.status === "recovered")
+        throw new StorageRecoveryError();
       next = mergeAppData(base, stored.data, desired);
     }
     try {
@@ -378,24 +537,50 @@ export function commitStoredOperation<R>(
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const raw = destination.getItem(STORAGE_KEY);
     const stored = readSnapshot(destination, raw);
-    if ((stored.status === 'corrupt' || stored.status === 'recovered') && !options.replaceCorrupt) {
+    if (
+      (stored.status === "corrupt" || stored.status === "recovered") &&
+      !options.replaceCorrupt
+    ) {
       throw new StorageRecoveryError();
     }
     const attempt = operation(stored.data);
     const desired = validateBackup(attempt.data);
-    const candidate = options.replaceCorrupt ? desired : retainConfirmedDays(stored.data, desired);
+    const candidate = options.replaceCorrupt
+      ? desired
+      : retainConfirmedDays(stored.data, desired);
     const next: AppData = {
       ...candidate,
-      transactions: retainRecordOrder(stored.data.transactions, candidate.transactions),
-      ...(stored.data.shoppingList !== undefined || candidate.shoppingList !== undefined ? {
-        shoppingList: retainRecordOrder(stored.data.shoppingList ?? [], candidate.shoppingList ?? []),
-      } : {}),
-      ...(stored.data.categoryBudgets !== undefined || candidate.categoryBudgets !== undefined ? {
-        categoryBudgets: retainRecordOrder(stored.data.categoryBudgets ?? [], candidate.categoryBudgets ?? []),
-      } : {}),
-      ...(stored.data.shoppingTemplates !== undefined || candidate.shoppingTemplates !== undefined ? {
-        shoppingTemplates: retainRecordOrder(stored.data.shoppingTemplates ?? [], candidate.shoppingTemplates ?? []),
-      } : {}),
+      transactions: retainRecordOrder(
+        stored.data.transactions,
+        candidate.transactions,
+      ),
+      ...(stored.data.shoppingList !== undefined ||
+      candidate.shoppingList !== undefined
+        ? {
+            shoppingList: retainRecordOrder(
+              stored.data.shoppingList ?? [],
+              candidate.shoppingList ?? [],
+            ),
+          }
+        : {}),
+      ...(stored.data.categoryBudgets !== undefined ||
+      candidate.categoryBudgets !== undefined
+        ? {
+            categoryBudgets: retainRecordOrder(
+              stored.data.categoryBudgets ?? [],
+              candidate.categoryBudgets ?? [],
+            ),
+          }
+        : {}),
+      ...(stored.data.shoppingTemplates !== undefined ||
+      candidate.shoppingTemplates !== undefined
+        ? {
+            shoppingTemplates: retainRecordOrder(
+              stored.data.shoppingTemplates ?? [],
+              candidate.shoppingTemplates ?? [],
+            ),
+          }
+        : {}),
     };
     try {
       writePrepared(JSON.stringify(next), destination, options, { raw });
@@ -414,16 +599,36 @@ export function commitStoredMutation(
   storage?: StorageAdapter,
   options: WriteOptions = {},
 ): AppData {
-  return commitStoredOperation(base, (current) => ({ data: update(current), result: undefined }), storage, options).data;
+  return commitStoredOperation(
+    base,
+    (current) => ({ data: update(current), result: undefined }),
+    storage,
+    options,
+  ).data;
 }
 
 /** Merge a profile editor without copying or validating the expense history. */
-export function mergeProfileDraft(base: Profile, current: Profile, draft: Profile): Profile {
+export function mergeProfileDraft(
+  base: Profile,
+  current: Profile,
+  draft: Profile,
+): Profile {
   const profileData = createEmptyData();
   const original = validateBackup({ ...profileData, profile: base }).profile;
-  const remote = current === base ? original : validateBackup({ ...profileData, profile: current }).profile;
-  const local = draft === base ? original : draft === current ? remote : validateBackup({ ...profileData, profile: draft }).profile;
-  return validateBackup({ ...profileData, profile: mergeFields(original, remote, local) }).profile;
+  const remote =
+    current === base
+      ? original
+      : validateBackup({ ...profileData, profile: current }).profile;
+  const local =
+    draft === base
+      ? original
+      : draft === current
+        ? remote
+        : validateBackup({ ...profileData, profile: draft }).profile;
+  return validateBackup({
+    ...profileData,
+    profile: mergeProfileFields(original, remote, local),
+  }).profile;
 }
 
 /** Keep separate categories independent, but amount and currency indivisible. */
@@ -433,10 +638,24 @@ export function mergeCategoryBudgetsDraft(
   draft: CategoryBudget[],
 ): CategoryBudget[] {
   const empty = createEmptyData();
-  const original = validateBackup({ ...empty, categoryBudgets: base }).categoryBudgets!;
-  const remote = current === base ? original : validateBackup({ ...empty, categoryBudgets: current }).categoryBudgets!;
-  const local = draft === base ? original : draft === current ? remote : validateBackup({ ...empty, categoryBudgets: draft }).categoryBudgets!;
-  return validateBackup({ ...empty, categoryBudgets: mergeRecords(original, remote, local, { atomic: true }) }).categoryBudgets!;
+  const original = validateBackup({
+    ...empty,
+    categoryBudgets: base,
+  }).categoryBudgets!;
+  const remote =
+    current === base
+      ? original
+      : validateBackup({ ...empty, categoryBudgets: current }).categoryBudgets!;
+  const local =
+    draft === base
+      ? original
+      : draft === current
+        ? remote
+        : validateBackup({ ...empty, categoryBudgets: draft }).categoryBudgets!;
+  return validateBackup({
+    ...empty,
+    categoryBudgets: mergeRecords(original, remote, local, { atomic: true }),
+  }).categoryBudgets!;
 }
 
 /** A dialog changes only its edited fields, retaining newer purchase details and prices. */
@@ -445,7 +664,9 @@ export function mergeTransactionDraft(
   current: Transaction | undefined,
   draft: Transaction,
 ): Transaction {
-  if (!current || current.id !== base.id || draft.id !== base.id) throw new DataConflictError();
+  if (!current || current.id !== base.id || draft.id !== base.id)
+    throw new DataConflictError();
   const transaction = mergeFields(base, current, draft);
-  return validateBackup({ ...createEmptyData(), transactions: [transaction] }).transactions[0];
+  return validateBackup({ ...createEmptyData(), transactions: [transaction] })
+    .transactions[0];
 }

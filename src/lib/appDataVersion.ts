@@ -6,11 +6,12 @@ export const APP_DATA_VERSIONS = {
   planning: 2,
   streak: 3,
   manualRates: 4,
+  automaticRates: 5,
 } as const;
 
 export type AppDataVersion =
   (typeof APP_DATA_VERSIONS)[keyof typeof APP_DATA_VERSIONS];
-export const CURRENT_APP_DATA_VERSION = APP_DATA_VERSIONS.manualRates;
+export const CURRENT_APP_DATA_VERSION = APP_DATA_VERSIONS.automaticRates;
 const supportedVersions: readonly number[] = Object.values(APP_DATA_VERSIONS);
 
 export function isSupportedAppDataVersion(
@@ -21,6 +22,8 @@ export function isSupportedAppDataVersion(
 
 /** Legacy version-two copies stay version two even after their last feature is removed. */
 export function getDataVersion(data: AppData): AppDataVersion {
+  if (data.profile.exchangeRateSync !== undefined)
+    return APP_DATA_VERSIONS.automaticRates;
   if (data.profile.exchangeRates !== undefined)
     return APP_DATA_VERSIONS.manualRates;
   if (data.streak !== undefined) return APP_DATA_VERSIONS.streak;

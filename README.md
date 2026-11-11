@@ -1,5 +1,7 @@
 # BeliLog (ベリログ)
 
+[![CI](https://github.com/riokoqee/belilog/actions/workflows/pages.yml/badge.svg)](https://github.com/riokoqee/belilog/actions/workflows/pages.yml) [![MIT](https://img.shields.io/github/license/riokoqee/belilog)](LICENSE) [![Latest release](https://img.shields.io/github/v/release/riokoqee/belilog)](https://github.com/riokoqee/belilog/releases/latest)
+
 **Every Berry Counts.** A local-first expense tracker with a pirate-inspired identity.
 
 [Open BeliLog](https://riokoqee.github.io/belilog/) · [Русский](README.ru.md)
@@ -19,11 +21,14 @@
 
 - Expenses, purchase details, monthly budgets and category limits.
 - Shopping lists with prices, purchase confirmation and reusable templates.
-- USD, EUR and KZT with manual rates; Russian and English; light, dark and system themes.
+- USD, EUR and KZT: manual rates by default, optional daily updates from Frankfurter.
+- Installable PWA with offline pages and PDF export after initial preparation; Russian and English; three themes.
 - No-spend check-ins, streak freezes and a personal WANTED poster.
 - PDF reports, CSV export and full PDF/JSON backups.
 
 Data stays in this browser, including after you close the site. There is no account or automatic device sync. Download a full backup before clearing browser data.
+
+To install, open **Profile → App** or use your browser's install menu. Wait for **Offline ready** before disconnecting. Updates apply after all BeliLog tabs are closed and the app is reopened.
 
 ## Run locally
 
@@ -46,6 +51,7 @@ React 19 · TypeScript · Vite. Static hosting through GitHub Pages.
 ## Documentation
 
 - [User guide in Russian](docs/USAGE.ru.md)
+- [Changelog](CHANGELOG.md) and [releases](https://github.com/riokoqee/belilog/releases)
 - [Development, browser tests and deployment](docs/DEVELOPMENT.md)
 - [Streaks and freezes](docs/STREAKS.md)
 - [Design](docs/DESIGN_REDESIGN.md) and [performance](docs/PERFORMANCE.md)

@@ -267,6 +267,7 @@ export default function AppWorkspace({
             <TrackerPage
               filtered={filtered}
               rates={data.profile.exchangeRates}
+              sync={data.profile.exchangeRateSync}
               language={language}
               currency={currency}
               search={search}
@@ -328,6 +329,7 @@ export default function AppWorkspace({
               }}
               onCurrencyChange={updateCurrency}
               onExchangeRatesSave={saveExchangeRates}
+              automaticRates={settings.automaticRates}
               onThemeChange={(theme) => {
                 commitProfileFields({ theme });
               }}

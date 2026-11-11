@@ -1,0 +1,9 @@
+.pwa-settings { min-width: 0; padding: 22px; }
+.pwa-settings-heading { display: flex; align-items: center; gap: 10px; color: var(--text); }
+.pwa-settings-heading h3 { margin: 0; font-size: 14px; font-weight: 650; }
+.pwa-settings-heading svg { color: var(--teal); }
+.pwa-settings > p { margin: 8px 0 0; line-height: 1.6; }
+.pwa-settings p svg { display: inline-block; vertical-align: -2px; }
+.pwa-settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pwa-settings-actions:has(.button) { margin-top: 12px; }
+.pwa-settings-actions .button { min-height: 44px; white-space: normal; }

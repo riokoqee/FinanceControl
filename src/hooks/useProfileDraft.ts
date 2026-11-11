@@ -1,17 +1,52 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
-import type { Profile } from '../lib/finance';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import type { Dispatch, SetStateAction } from "react";
+import type { Profile } from "../lib/finance";
 
-const fields: (keyof Profile)[] = ['name', 'email', 'currency', 'monthlyBudget', 'theme', 'language', 'avatar', 'exchangeRates'];
-const equalField = (a: Profile, b: Profile, field: keyof Profile) => field === 'exchangeRates'
-  ? a.exchangeRates === b.exchangeRates || (!!a.exchangeRates && !!b.exchangeRates
-    && a.exchangeRates.EUR === b.exchangeRates.EUR && a.exchangeRates.KZT === b.exchangeRates.KZT)
-  : a[field] === b[field];
-const same = (a: Profile, b: Profile) => fields.every((field) => equalField(a, b, field));
-const valid = (profile: Profile, persisted: Profile) => Boolean(profile.name.trim()) && Number.isFinite(profile.monthlyBudget) &&
-  profile.monthlyBudget >= 0 && profile.monthlyBudget <= 1e12 &&
-  (profile.monthlyBudget === persisted.monthlyBudget || Math.round(profile.monthlyBudget * 100) / 100 === profile.monthlyBudget) &&
-  (!profile.email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email.trim()));
+const fields: (keyof Profile)[] = [
+  "name",
+  "email",
+  "currency",
+  "monthlyBudget",
+  "theme",
+  "language",
+  "avatar",
+  "exchangeRates",
+  "exchangeRateSync",
+];
+const equalField = (a: Profile, b: Profile, field: keyof Profile) =>
+  field === "exchangeRateSync"
+    ? a.exchangeRateSync === b.exchangeRateSync ||
+      (!!a.exchangeRateSync &&
+        !!b.exchangeRateSync &&
+        a.exchangeRateSync.mode === b.exchangeRateSync.mode &&
+        a.exchangeRateSync.source === b.exchangeRateSync.source &&
+        a.exchangeRateSync.checkedAt === b.exchangeRateSync.checkedAt &&
+        a.exchangeRateSync.dates?.EUR === b.exchangeRateSync.dates?.EUR &&
+        a.exchangeRateSync.dates?.KZT === b.exchangeRateSync.dates?.KZT)
+    : field === "exchangeRates"
+      ? a.exchangeRates === b.exchangeRates ||
+        (!!a.exchangeRates &&
+          !!b.exchangeRates &&
+          a.exchangeRates.EUR === b.exchangeRates.EUR &&
+          a.exchangeRates.KZT === b.exchangeRates.KZT)
+      : a[field] === b[field];
+const same = (a: Profile, b: Profile) =>
+  fields.every((field) => equalField(a, b, field));
+const valid = (profile: Profile, persisted: Profile) =>
+  Boolean(profile.name.trim()) &&
+  Number.isFinite(profile.monthlyBudget) &&
+  profile.monthlyBudget >= 0 &&
+  profile.monthlyBudget <= 1e12 &&
+  (profile.monthlyBudget === persisted.monthlyBudget ||
+    Math.round(profile.monthlyBudget * 100) / 100 === profile.monthlyBudget) &&
+  (!profile.email.trim() ||
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email.trim()));
 
 /** Keep typing responsive; blur, navigation and pagehide flush the latest valid draft. */
 export function useProfileDraft(
@@ -25,11 +60,15 @@ export function useProfileDraft(
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef({ profile, persisted, active, save });
   latest.current = { profile, persisted, active, save };
-  const setProfile: Dispatch<SetStateAction<Profile>> = useCallback((change) => {
-    const next = typeof change === 'function' ? change(latest.current.profile) : change;
-    latest.current = { ...latest.current, profile: next };
-    renderProfile(next);
-  }, []);
+  const setProfile: Dispatch<SetStateAction<Profile>> = useCallback(
+    (change) => {
+      const next =
+        typeof change === "function" ? change(latest.current.profile) : change;
+      latest.current = { ...latest.current, profile: next };
+      renderProfile(next);
+    },
+    [],
+  );
   const cancel = useCallback(() => {
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = null;
@@ -39,7 +78,11 @@ export function useProfileDraft(
     const current = latest.current;
     if (!current.active) return true;
     if (!valid(current.profile, current.persisted)) return false;
-    const normalized = { ...current.profile, name: current.profile.name.trim(), email: current.profile.email.trim() };
+    const normalized = {
+      ...current.profile,
+      name: current.profile.name.trim(),
+      email: current.profile.email.trim(),
+    };
     if (same(normalized, current.persisted)) {
       base.current = current.persisted;
       return true;
@@ -51,7 +94,10 @@ export function useProfileDraft(
     // Retain the user's raw spacing while reconciling fields changed in another tab.
     const next = { ...saved };
     for (const field of fields) {
-      if (!equalField(current.profile, previous, field) && equalField(saved, normalized, field)) {
+      if (
+        !equalField(current.profile, previous, field) &&
+        equalField(saved, normalized, field)
+      ) {
         Object.assign(next, { [field]: current.profile[field] });
       }
     }
@@ -66,34 +112,55 @@ export function useProfileDraft(
     setProfile(latest.current.persisted);
   }, [cancel, setProfile]);
 
-  const commitProfileFields = useCallback((patch: Partial<Profile>): Profile | null => {
-    const current = latest.current;
-    const previous = base.current;
-    const selected = new Set(fields.filter((field) => Object.prototype.hasOwnProperty.call(patch, field)));
-    // Clicking the selected theme must not cancel an unrelated pending autosave.
-    if ([...selected].every((field) => equalField({ ...current.persisted, ...patch }, current.persisted, field) && equalField(current.profile, current.persisted, field))) {
-      return current.persisted;
-    }
-    cancel();
-    const patchBase = { ...current.persisted };
-    for (const field of selected) Object.assign(patchBase, { [field]: previous[field] });
-    // Unrelated draft text may be temporarily invalid. Only selected fields are
-    // submitted, against their original baseline, so conflicts remain visible.
-    const saved = current.save(patchBase, { ...current.persisted, ...patch });
-    if (!saved) return null;
-    const next = { ...saved };
-    const nextBase = { ...saved };
-    for (const field of fields) {
-      if (!selected.has(field) && !equalField(current.profile, previous, field) && !equalField(current.profile, saved, field)) {
-        Object.assign(next, { [field]: current.profile[field] });
-        Object.assign(nextBase, { [field]: previous[field] });
+  const commitProfileFields = useCallback(
+    (patch: Partial<Profile>): Profile | null => {
+      const current = latest.current;
+      const previous = base.current;
+      const selected = new Set(
+        fields.filter((field) =>
+          Object.prototype.hasOwnProperty.call(patch, field),
+        ),
+      );
+      // Clicking the selected theme must not cancel an unrelated pending autosave.
+      if (
+        [...selected].every(
+          (field) =>
+            equalField(
+              { ...current.persisted, ...patch },
+              current.persisted,
+              field,
+            ) && equalField(current.profile, current.persisted, field),
+        )
+      ) {
+        return current.persisted;
       }
-    }
-    base.current = nextBase;
-    latest.current = { ...current, profile: next, persisted: saved };
-    if (!same(current.profile, next)) setProfile(next);
-    return saved;
-  }, [cancel, setProfile]);
+      cancel();
+      const patchBase = { ...current.persisted };
+      for (const field of selected)
+        Object.assign(patchBase, { [field]: previous[field] });
+      // Unrelated draft text may be temporarily invalid. Only selected fields are
+      // submitted, against their original baseline, so conflicts remain visible.
+      const saved = current.save(patchBase, { ...current.persisted, ...patch });
+      if (!saved) return null;
+      const next = { ...saved };
+      const nextBase = { ...saved };
+      for (const field of fields) {
+        if (
+          !selected.has(field) &&
+          !equalField(current.profile, previous, field) &&
+          !equalField(current.profile, saved, field)
+        ) {
+          Object.assign(next, { [field]: current.profile[field] });
+          Object.assign(nextBase, { [field]: previous[field] });
+        }
+      }
+      base.current = nextBase;
+      latest.current = { ...current, profile: next, persisted: saved };
+      if (!same(current.profile, next)) setProfile(next);
+      return saved;
+    },
+    [cancel, setProfile],
+  );
 
   useLayoutEffect(() => {
     if (observed.current === persisted) return;
@@ -104,7 +171,10 @@ export function useProfileDraft(
     const next = { ...persisted };
     const nextBase = { ...persisted };
     for (const field of fields) {
-      if (!equalField(draft, previous, field) && !equalField(draft, persisted, field)) {
+      if (
+        !equalField(draft, previous, field) &&
+        !equalField(draft, persisted, field)
+      ) {
         Object.assign(next, { [field]: draft[field] });
         Object.assign(nextBase, { [field]: previous[field] });
       }
@@ -116,23 +186,40 @@ export function useProfileDraft(
     cancel();
     const current = latest.current;
     if (!current.active || !valid(current.profile, current.persisted)) return;
-    const normalized = { ...current.profile, name: current.profile.name.trim(), email: current.profile.email.trim() };
+    const normalized = {
+      ...current.profile,
+      name: current.profile.name.trim(),
+      email: current.profile.email.trim(),
+    };
     if (same(normalized, current.persisted)) return;
-    const immediate = current.profile.theme !== base.current.theme || current.profile.currency !== base.current.currency ||
-      current.profile.language !== base.current.language || current.profile.avatar !== base.current.avatar || !equalField(current.profile, base.current, 'exchangeRates');
+    const immediate =
+      current.profile.theme !== base.current.theme ||
+      current.profile.currency !== base.current.currency ||
+      current.profile.language !== base.current.language ||
+      current.profile.avatar !== base.current.avatar ||
+      !equalField(current.profile, base.current, "exchangeRates") ||
+      !equalField(current.profile, base.current, "exchangeRateSync");
     if (immediate) flushProfile();
     else timer.current = setTimeout(flushProfile, 350);
     return cancel;
   }, [profile, persisted, active, cancel, flushProfile]);
   useEffect(() => {
-    const hidden = () => { if (document.visibilityState === 'hidden') flushProfile(); };
-    window.addEventListener('pagehide', flushProfile);
-    document.addEventListener('visibilitychange', hidden);
+    const hidden = () => {
+      if (document.visibilityState === "hidden") flushProfile();
+    };
+    window.addEventListener("pagehide", flushProfile);
+    document.addEventListener("visibilitychange", hidden);
     return () => {
       flushProfile();
-      window.removeEventListener('pagehide', flushProfile);
-      document.removeEventListener('visibilitychange', hidden);
+      window.removeEventListener("pagehide", flushProfile);
+      document.removeEventListener("visibilitychange", hidden);
     };
   }, [flushProfile]);
-  return { profile, setProfile, flushProfile, reloadProfile, commitProfileFields };
+  return {
+    profile,
+    setProfile,
+    flushProfile,
+    reloadProfile,
+    commitProfileFields,
+  };
 }
