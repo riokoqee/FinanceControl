@@ -10,6 +10,8 @@ import type { DialogController } from "./useDialogState";
 import type { AppFeedback } from "./useAppFeedback";
 import type { ProfileSettings } from "./useProfileSettings";
 import type { ExpenseView } from "./useExpenseView";
+import { readPreReplaceData } from "../lib/storage/storage";
+import { storageCopy } from "../lib/storageCopy";
 
 interface Options {
   store: AppDataController;
@@ -110,7 +112,33 @@ export function useBackupRestore({
   }
   function confirmReplacement() {
     if (dialogs.state.kind !== "confirmation") return;
-    if (dialogs.state.action === "recovery") {
+    if (dialogs.state.action === "pre-replace") {
+      try {
+        const previous = readPreReplaceData();
+        if (!previous) {
+          feedback.setToast({
+            message: storageCopy[data.profile.language].missing,
+          });
+          dialogs.close();
+          return;
+        }
+        const saved = commit(previous, true);
+        if (!saved) return;
+        feedback.setCelebration(null);
+        profile.setProfile(saved.profile);
+        view.setMonth(currentMonth());
+        view.resetFilters();
+        dialogs.close();
+        feedback.setToast({
+          message: storageCopy[saved.profile.language].restored,
+        });
+      } catch {
+        feedback.setToast({
+          message: storageCopy[data.profile.language].failed,
+          error: true,
+        });
+      }
+    } else if (dialogs.state.action === "recovery") {
       const saved = commit(data, true);
       if (!saved) return;
       dialogs.close();
@@ -142,6 +170,7 @@ export function useBackupRestore({
     exportCsvReport,
     exportRecord,
     showDemoBanner,
+    preReplaceAvailable: store.preReplaceAvailable,
     dismissDemo: () => setShowDemoBanner(false),
     restoreBackup,
     startDemo,

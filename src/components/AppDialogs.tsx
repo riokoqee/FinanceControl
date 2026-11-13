@@ -11,6 +11,7 @@ import Button from "./Button";
 import FeatureBoundary from "./FeatureBoundary";
 import LoadingState from "./LoadingState";
 import Modal from "./Modal";
+import { storageCopy } from "../lib/storageCopy";
 
 const TransactionDialog = lazy(() => import("./TransactionDialog"));
 const EntryDetails = lazy(() => import("./EntryDetails"));
@@ -201,11 +202,13 @@ export default function AppDialogs({
           <div className="dialog-header">
             <div>
               <h2>
-                {confirmation === "recovery"
-                  ? tr("ui.restoreTheLastGoodCopy")
-                  : confirmation === "reset"
-                    ? tr("ui.startFresh")
-                    : tr("ui.loadDemoAlternative")}
+                {confirmation === "pre-replace"
+                  ? storageCopy[language].restore
+                  : confirmation === "recovery"
+                    ? tr("ui.restoreTheLastGoodCopy")
+                    : confirmation === "reset"
+                      ? tr("ui.startFresh")
+                      : tr("ui.loadDemoAlternative")}
               </h2>
             </div>
             <button
@@ -217,17 +220,19 @@ export default function AppDialogs({
             </button>
           </div>
           <p className="modal-description">
-            {confirmation === "recovery"
-              ? tr(
-                  "ui.theDamagedDataWillBeArchivedSeparatelyYourWorkingCopyWillBeEditableAgain",
-                )
-              : confirmation === "reset"
+            {confirmation === "pre-replace"
+              ? storageCopy[language].restoreHint
+              : confirmation === "recovery"
                 ? tr(
-                    "ui.allBelilogDataWillBeRemovedFromThisBrowserYouCanDownloadABackupFirst",
+                    "ui.theDamagedDataWillBeArchivedSeparatelyYourWorkingCopyWillBeEditableAgain",
                   )
-                : tr(
-                    "ui.theDemoReplacesAllBelilogDataDownloadABackupToReturnToYourData",
-                  )}
+                : confirmation === "reset"
+                  ? tr(
+                      "ui.allBelilogDataWillBeRemovedFromThisBrowserYouCanDownloadABackupFirst",
+                    )
+                  : tr(
+                      "ui.theDemoReplacesAllBelilogDataDownloadABackupToReturnToYourData",
+                    )}
           </p>
           <div className="confirmation-backup">
             <Button onClick={onBackupExport}>
@@ -241,11 +246,13 @@ export default function AppDialogs({
               variant={confirmation === "reset" ? "danger" : "primary"}
               onClick={onConfirmationConfirm}
             >
-              {confirmation === "recovery"
-                ? tr("ui.restoreBackup")
-                : confirmation === "reset"
-                  ? tr("ui.deleteAllData")
-                  : tr("ui.loadDemo")}
+              {confirmation === "pre-replace"
+                ? storageCopy[language].restore
+                : confirmation === "recovery"
+                  ? tr("ui.restoreBackup")
+                  : confirmation === "reset"
+                    ? tr("ui.deleteAllData")
+                    : tr("ui.loadDemo")}
             </Button>
           </div>
         </Modal>

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import {
   checkPwaUpdate,
+  applyPwaUpdate,
   getPwaStatus,
   installPwa,
   subscribePwa,
@@ -11,5 +12,6 @@ export function usePwa() {
     ...useSyncExternalStore(subscribePwa, getPwaStatus, getPwaStatus),
     installApp: installPwa,
     checkUpdate: checkPwaUpdate,
+    applyUpdate: applyPwaUpdate,
   };
 }

@@ -16,8 +16,10 @@ export { parseMoney } from "../finance";
 
 export const LAST_GOOD_KEY = `${STORAGE_KEY}:last-good`;
 export const CORRUPT_KEY = `${STORAGE_KEY}:recovery`;
+export const PRE_REPLACE_KEY = `${STORAGE_KEY}:pre-replace`;
 
-type StorageAdapter = Pick<Storage, "getItem" | "setItem">;
+type StorageAdapter = Pick<Storage, "getItem" | "setItem"> &
+  Partial<Pick<Storage, "removeItem">>;
 type WriteOptions = { replaceCorrupt?: boolean };
 
 // Strings are immutable: unlike an AppData identity, this cannot become stale when
@@ -122,6 +124,20 @@ export function readStoredData(
     : stored;
 }
 
+/** The one replacement snapshot is independent of the last-good working copy. */
+export function hasPreReplaceData(storage?: StorageAdapter): boolean {
+  try {
+    return browserStorage(storage).getItem(PRE_REPLACE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+export function readPreReplaceData(storage?: StorageAdapter): AppData | null {
+  const raw = browserStorage(storage).getItem(PRE_REPLACE_KEY);
+  return raw === null ? null : validateBackup(raw);
+}
+
 /** Only called with a canonical, freshly validated payload. */
 function writePrepared(
   serialized: string,
@@ -140,8 +156,35 @@ function writePrepared(
     if (!options.replaceCorrupt) throw new StorageRecoveryError();
     // A failed archive write must leave the original untouched.
     destination.setItem(CORRUPT_KEY, raw!);
+  } else if (options.replaceCorrupt && raw !== null) {
+    try {
+      destination.setItem(PRE_REPLACE_KEY, raw);
+    } catch {
+      // Keeping a replacement snapshot is best effort and must not block a reset/import.
+    }
   }
-  destination.setItem(STORAGE_KEY, serialized);
+  try {
+    destination.setItem(STORAGE_KEY, serialized);
+  } catch (cause) {
+    if (
+      !cause ||
+      typeof cause !== "object" ||
+      !("name" in cause) ||
+      cause.name !== "QuotaExceededError" ||
+      !destination.removeItem
+    )
+      throw cause;
+    try {
+      // Never remove the primary: setItem is atomic even if the retry fails.
+      destination.removeItem(LAST_GOOD_KEY);
+      if (expected && destination.getItem(STORAGE_KEY) !== raw)
+        throw new StorageChangedError();
+      destination.setItem(STORAGE_KEY, serialized);
+    } catch (retryCause) {
+      if (retryCause instanceof StorageChangedError) throw retryCause;
+      throw cause;
+    }
+  }
   checkedPrimary.set(destination, { raw: serialized, valid: true });
   try {
     destination.setItem(LAST_GOOD_KEY, serialized);

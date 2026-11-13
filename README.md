@@ -28,7 +28,9 @@
 
 Data stays in this browser, including after you close the site. There is no account or automatic device sync. Download a full backup before clearing browser data.
 
-To install, open **Profile → App** or use your browser's install menu. Wait for **Offline ready** before disconnecting. Updates apply after all BeliLog tabs are closed and the app is reopened.
+To install, open **Profile → App** or use your browser's install menu. Wait for **Offline ready** before disconnecting. Updates normally apply after all BeliLog tabs close. **Update now** saves the profile draft and reloads the app, closing open forms and dialogs.
+
+Before a full restore, reset or demo, the previous valid data is kept in one recovery slot when space permits. Use **Profile → Data → Restore data from before replacement** to return to it. Site storage usage is shown when supported by the browser.
 
 ## Run locally
 

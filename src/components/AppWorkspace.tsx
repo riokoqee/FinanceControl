@@ -313,6 +313,8 @@ export default function AppWorkspace({
                 bountyCelebration?.page === "profile" ? bountyCelebration : null
               }
               onFlush={flushProfile}
+              preReplaceAvailable={backup.preReplaceAvailable}
+              onRestorePreReplace={() => dialogs.confirm("pre-replace")}
               onReload={reloadProfile}
               onSave={() => {
                 if (flushProfile())

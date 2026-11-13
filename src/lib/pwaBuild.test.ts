@@ -13,6 +13,7 @@ function runtime({
   const stores = new Map<string, Map<string, Response>>();
   const handlers = new Map<string, (event: unknown) => void>();
   const claim = vi.fn(async () => {});
+  const skipWaiting = vi.fn(async () => {});
   const network = vi.fn(async () => new Response("network"));
   const added: Request[][] = [];
   const caches = {
@@ -67,6 +68,7 @@ function runtime({
         location: { origin },
         registration: { active: active ? {} : null },
         clients: { claim },
+        skipWaiting,
         addEventListener(name: string, handler: (event: unknown) => void) {
           handlers.set(name, handler);
         },
@@ -92,7 +94,27 @@ function runtime({
     });
     return pending ? (await pending).text() : undefined;
   }
-  return { stores, caches, added, claim, network, lifecycle, request };
+  async function message(data: unknown) {
+    let pending: Promise<void> | undefined;
+    handlers.get("message")!({
+      data,
+      waitUntil(value: Promise<void>) {
+        pending = value;
+      },
+    });
+    await pending;
+  }
+  return {
+    stores,
+    caches,
+    added,
+    claim,
+    skipWaiting,
+    network,
+    lifecycle,
+    request,
+    message,
+  };
 }
 
 describe("installable BeliLog manifest", () => {
@@ -113,6 +135,37 @@ describe("installable BeliLog manifest", () => {
 });
 
 describe("atomic, scoped offline app releases", () => {
+  it("accepts SKIP_WAITING only for an explicit update and retains old lazy chunks for other tabs", async () => {
+    const worker = runtime({ active: true });
+    const oldName = "belilog-pwa:%2Fbelilog%2F:old";
+    worker.stores.set(
+      oldName,
+      new Map([
+        [`${origin}/belilog/assets/old-page.js`, new Response("old page")],
+      ]),
+    );
+    await worker.lifecycle("install");
+    expect(worker.skipWaiting).not.toHaveBeenCalled();
+    await worker.message({ type: "OTHER" });
+    expect(worker.skipWaiting).not.toHaveBeenCalled();
+    await worker.message({ type: "SKIP_WAITING" });
+    expect(worker.skipWaiting).toHaveBeenCalledOnce();
+    await worker.lifecycle("activate");
+    expect(worker.stores.has(oldName)).toBe(true);
+    expect(await worker.request(`${origin}/belilog/assets/old-page.js`)).toBe(
+      "old page",
+    );
+    expect(worker.claim).not.toHaveBeenCalled();
+    expect(worker.network).not.toHaveBeenCalled();
+  });
+  it("keeps the original first-install claim behavior even if it receives an update message", async () => {
+    const worker = runtime();
+    await worker.lifecycle("install");
+    await worker.message({ type: "SKIP_WAITING" });
+    expect(worker.skipWaiting).not.toHaveBeenCalled();
+    await worker.lifecycle("activate");
+    expect(worker.claim).toHaveBeenCalledOnce();
+  });
   it("precaches lazy modules and the PDF font, bypassing HTTP cache", async () => {
     const worker = runtime();
     await worker.lifecycle("install");

@@ -33,6 +33,7 @@ try {
   await run('tests/refactor-browser.mjs');
   await run('tests/pwa-browser.mjs');
   await run('tests/rates-browser.mjs');
+  await run('tests/storage-safety-browser.mjs');
 } catch (error) {
   console.error(error);
   process.exitCode = 1;

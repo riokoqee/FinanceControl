@@ -179,8 +179,9 @@ try {
     }, key);
     await form(page).getByRole('button', { name: 'Refresh rates', exact: true }).click();
     await until(async () => assert.equal(await form(page).getByRole('button', { name: 'Refresh rates', exact: true }).isEnabled(), true));
-    await until(async () => assert.match(await form(page).innerText(), /Rates could not be updated/));
-    assert.doesNotMatch(await form(page).innerText(), /Rate settings have changed/);
+    await until(async () => assert.match(await form(page).innerText(), /New rates were received but could not be saved/));
+    assert.doesNotMatch(await form(page).innerText(), /Rate settings have changed|Rates could not be updated/);
+    assert.equal(await form(page).getByRole('status').filter({ hasText: 'New rates were received' }).getAttribute('class'), 'field-hint');
     assert.deepEqual(await read(page), before);
   }, { data: seed(snapshot) });
 

@@ -3,7 +3,7 @@ import type { Language } from "./finance";
 /** Stable identifiers: editing interface wording never changes a translation key. */
 export const russian = {
   "ui.deletesAllBelilogDataFromThisBrowser":
-    "Удаляет все данные BeliLog из этого браузера.",
+    "Очищает текущий журнал. Локальная копия для отката может сохраниться.",
   "ui.categoryLimits": "Лимиты категорий",
   "ui.limits": "Лимиты",
   "ui.templates": "Шаблоны",
@@ -19,7 +19,7 @@ export const russian = {
   "ui.restoreEverythingReplacesAllBelilogDataWithThisBackup":
     "Восстановить всё заменит все данные BeliLog содержимым копии.",
   "ui.allBelilogDataWillBeRemovedFromThisBrowserYouCanDownloadABackupFirst":
-    "Все данные BeliLog будут удалены из этого браузера. Перед удалением можно скачать резервную копию.",
+    "Текущие данные BeliLog будут сброшены. По возможности сохранится локальная копия для отката. Можно также скачать резервную копию.",
   "ui.theDemoReplacesAllBelilogDataDownloadABackupToReturnToYourData":
     "Демо заменит все данные BeliLog. Скачайте копию, чтобы вернуться к своим данным.",
   "ui.autosave": "Автосохранение",
@@ -376,7 +376,7 @@ export const russian = {
 export type MessageKey = keyof typeof russian;
 export const english = {
   "ui.deletesAllBelilogDataFromThisBrowser":
-    "Deletes all BeliLog data from this browser.",
+    "Clears the current journal. A local recovery copy may remain.",
   "ui.categoryLimits": "Category limits",
   "ui.limits": "Limits",
   "ui.templates": "Templates",
@@ -391,7 +391,7 @@ export const english = {
   "ui.restoreEverythingReplacesAllBelilogDataWithThisBackup":
     "Restore everything replaces all BeliLog data with this backup.",
   "ui.allBelilogDataWillBeRemovedFromThisBrowserYouCanDownloadABackupFirst":
-    "All BeliLog data will be removed from this browser. You can download a backup first.",
+    "Current BeliLog data will be reset. A local recovery copy is kept when possible. You can also download a backup first.",
   "ui.theDemoReplacesAllBelilogDataDownloadABackupToReturnToYourData":
     "The demo replaces all BeliLog data. Download a backup to return to your data.",
   "ui.autosave": "Autosave",

@@ -1,5 +1,13 @@
 # Оптимизация BeliLog 2.4
 
+## 2.11 storage note (English)
+
+Primary writes retry once after evicting the duplicate last-good copy on a quota error. A valid pre-replacement copy is best effort and adds storage only when available. The profile's browser estimate covers the entire site, including PWA caches; it is not a measurement of the separate localStorage limit. The historical performance measurements below are unchanged.
+
+## Примечание к 2.11
+
+При ошибке квоты основная запись повторяется один раз после удаления дополнительной рабочей копии. Снимок перед заменой сохраняется по возможности. Оценка в профиле относится ко всему сайту, включая PWA-кэш, и не измеряет отдельный лимит localStorage. Исторические замеры ниже не изменялись.
+
 Замеры от 6 ноября 2026 года. База сравнения — `0467769` (2.3.0), результат — версия 2.4. Изменения сохраняют существующий формат данных и ключ `localStorage`; перенос журнала не нужен.
 
 ## Что изменено
@@ -49,7 +57,7 @@ GITHUB_PAGES=true npm run preview -- --port 5175 --strictPort
 
 ```bash
 node scripts/performance.mjs
-npx vitest bench src/lib/storage.bench.ts --run
+npx vitest bench src/lib/storage/storage.bench.ts --run
 ```
 
 Браузерный скрипт создаёт отдельные контексты со своими данными и сохраняет `performance-results.json`. Можно задать `BELILOG_URL`, `BENCH_OUTPUT`, `BENCH_DIST` и `CHROMIUM_PATH`. Микрозамер Vitest отделяет стоимость валидации, объединения и сериализации от браузерного рендеринга; его времена нельзя напрямую сравнивать с таблицей выше.

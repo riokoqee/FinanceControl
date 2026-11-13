@@ -262,6 +262,62 @@ try {
     assert.equal(await next.evaluate(() => localStorage.getItem('unrelated-app-data')), 'keep me');
     assert.equal(await next.evaluate(key => JSON.parse(localStorage.getItem(key)).transactions[0].title, key), 'Offline bread');
   });
+  await check('explicit update flushes the profile, reloads once and preserves another tab with old lazy assets', async context => {
+    const first = await open(context, 'profile');
+    await controlled(first);
+    const second = await open(context, 'tracker');
+    await controlled(second);
+    await second.getByRole('button', { name: 'Add expense', exact: true }).first().click();
+    const title = second.getByRole('dialog').getByRole('textbox', { name: 'What did you spend on?', exact: true });
+    await title.fill('Keep this other-tab draft');
+    const secondDocument = await second.evaluate(() => window.__pwaDocumentId);
+    const oldName = (await cacheNames(first)).find(name => name.endsWith('-test-1'));
+    const oldAsset = new URL('assets/previous-release-only.js', url).href;
+    await first.evaluate(async ({ name, asset }) => {
+      await (await caches.open(name)).put(asset, new Response('window.__oldReleaseModuleLoaded = true;', { headers: { 'Content-Type': 'text/javascript' } }));
+    }, { name: oldName, asset: oldAsset });
+    const before = await first.evaluate(key => JSON.parse(localStorage.getItem(key)), key);
+    version = 2;
+    await first.getByRole('button', { name: 'Check for updates', exact: true }).click();
+    await waiting(first);
+    await first.getByRole('button', { name: 'Update now', exact: true }).waitFor();
+    await first.locator('.profile-form input[required]').fill('Saved before update');
+    let navigations = 0;
+    first.on('framenavigated', frame => { if (frame === first.mainFrame()) navigations++; });
+    const navigation = first.waitForEvent('framenavigated', frame => frame === first.mainFrame());
+    // DOM click leaves focus in the field: applyPwaUpdate, rather than blur, must flush it.
+    await first.getByRole('button', { name: 'Update now', exact: true }).evaluate(button => button.click());
+    await navigation;
+    await first.locator('.profile-form').waitFor();
+    const after = await first.evaluate(key => JSON.parse(localStorage.getItem(key)), key);
+    assert.deepEqual(after, { ...before, profile: { ...before.profile, name: 'Saved before update' } });
+    assert.equal(await first.evaluate(() => localStorage.getItem('unrelated-app-data')), 'keep me');
+    assert.equal(await first.evaluate(key => localStorage.getItem(`${key}:pre-replace`), key), null);
+    assert.equal(await second.evaluate(() => window.__pwaDocumentId), secondDocument);
+    assert.equal(await title.inputValue(), 'Keep this other-tab draft');
+    assert.equal((await cacheNames(first)).includes(oldName), true);
+    denyAssets = true; networkAssets = 0;
+    assert.equal(await second.evaluate(async asset => { await import(asset); return window.__oldReleaseModuleLoaded; }, oldAsset), true);
+    assert.equal(networkAssets, 0, 'An old tab must load its previous release assets from cache after forced activation');
+    await delay(200);
+    assert.equal(navigations, 1);
+  });
+  await check('an invalid profile blocks explicit activation and keeps the waiting worker and draft', async context => {
+    const page = await open(context, 'profile');
+    await controlled(page);
+    version = 2;
+    await page.getByRole('button', { name: 'Check for updates', exact: true }).click();
+    await waiting(page);
+    const before = await page.evaluate(key => localStorage.getItem(key), key);
+    const documentId = await page.evaluate(() => window.__pwaDocumentId);
+    await page.locator('.profile-form input[type="email"]').fill('unfinished@');
+    await page.getByRole('button', { name: 'Update now', exact: true }).click();
+    await page.locator('.pwa-settings').getByText('Save or correct your profile draft before updating.', { exact: true }).waitFor();
+    await waiting(page);
+    assert.equal(await page.evaluate(() => window.__pwaDocumentId), documentId);
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), key), before);
+    assert.equal(await page.locator('.profile-form input[type="email"]').inputValue(), 'unfinished@');
+  });
   await check('failed new release retains active old offline copy and financial data', async context => {
     const page = await open(context, 'profile');
     await controlled(page);

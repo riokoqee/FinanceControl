@@ -1,5 +1,7 @@
 import type { ProfileSettings } from "../hooks/useProfileSettings";
 import PwaSettings from "../components/PwaSettings";
+import StorageUsage from "../components/StorageUsage";
+import { storageCopy } from "../lib/storageCopy";
 import type { MessageKey } from "../lib/messages";
 import { useMemo, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
@@ -38,7 +40,9 @@ interface ProfilePageProps {
   storageError: string;
   celebration: BountyCelebration | null;
   onSave: () => void;
-  onFlush: () => void;
+  onFlush: () => boolean;
+  preReplaceAvailable: boolean;
+  onRestorePreReplace: () => void;
   onReload: () => void;
   onAvatarSelect: (file?: File) => void;
   onEditAvatar: () => void;
@@ -70,6 +74,8 @@ export default function ProfilePage({
   celebration,
   onSave,
   onFlush,
+  preReplaceAvailable,
+  onRestorePreReplace,
   onReload,
   onAvatarSelect,
   onEditAvatar,
@@ -333,7 +339,7 @@ export default function ProfilePage({
         </div>
       </form>
       <div className="profile-right">
-        <PwaSettings language={language} />
+        <PwaSettings language={language} onFlushProfile={onFlush} />
         <section className="panel storage-card">
           <div className="storage-illustration">
             <ShieldCheck size={32} strokeWidth={1.3} />
@@ -343,6 +349,7 @@ export default function ProfilePage({
           <h2>{tr("ui.data")}</h2>
           <p>{settingsCopy[language].localData}</p>
           <div className="storage-details">
+            <StorageUsage language={language} data={data} />
             <div>
               <span>{tr("ui.totalRecords")}</span>
               <strong>{data.transactions.length}</strong>
@@ -361,6 +368,11 @@ export default function ProfilePage({
             </div>
           </div>
           <div className="storage-actions">
+            {preReplaceAvailable && (
+              <Button onClick={onRestorePreReplace}>
+                {storageCopy[language].restore}
+              </Button>
+            )}
             <Button onClick={onExport}>
               <Download size={16} />
               {tr("ui.pdfBackupWithAllYourData")}

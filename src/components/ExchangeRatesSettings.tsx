@@ -162,7 +162,14 @@ export default function ExchangeRatesSettings({
         </p>
       )}
       {isAutomatic && automatic.error && (
-        <p className="exchange-rates-error" role="status">
+        <p
+          className={
+            automatic.error === "storage"
+              ? "field-hint"
+              : "exchange-rates-error"
+          }
+          role="status"
+        >
           {
             t[
               {
@@ -170,12 +177,14 @@ export default function ExchangeRatesSettings({
                 timeout: "timeoutRates",
                 invalid: "invalidFeed",
                 network: "networkRates",
+                storage: "storageRates",
                 conflict: "conflictRates",
               }[automatic.error] as
                 | "offlineRates"
                 | "timeoutRates"
                 | "invalidFeed"
                 | "networkRates"
+                | "storageRates"
                 | "conflictRates"
             ]
           }

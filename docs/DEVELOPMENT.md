@@ -51,9 +51,15 @@ Production output includes a web app manifest and a service worker. Initial inst
 
 The worker serves versioned app assets from its own scope. Development `/` and Pages `/belilog/` paths remain independent. It does not store financial data or cache external exchange-rate requests; records remain in the existing validated `localStorage` pipeline.
 
-Updates do not force a reload or call `skipWaiting`. A complete replacement waits until all BeliLog tabs/windows are closed, then activates for the next opening. This avoids mixing a new shell with old lazy modules during editing. Failed installation leaves the previous complete cache available. Browser cache/storage eviction and deliberate clearing can still remove offline files or user data, so PWA installation does not replace backups.
+By default, a complete replacement waits until all BeliLog tabs/windows close. The explicit **Update now** action flushes the profile draft, sends [`SKIP_WAITING`](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerGlobalScope/skipWaiting) to the waiting worker and reloads the requesting page once on `controllerchange`. An invalid or unsaved profile blocks activation. Open forms and dialogs close on reload. Forced activation retains old lazy assets for other tabs; the next natural activation cleans retired scoped caches. This avoids mixing a new shell with old lazy modules during editing. Failed installation leaves the previous complete cache available. Browser cache/storage eviction and deliberate clearing can still remove offline files or user data, so PWA installation does not replace backups.
 
 Service workers require HTTPS, with localhost allowed for development. Lifecycle reference: [MDN — Using Service Workers](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers).
+
+### Storage safety in 2.11
+
+On `QuotaExceededError`, the primary write removes only `:last-good` and retries once; a failed retry throws the original exception without deleting the primary. Updating last-good remains best effort. Before an explicit full replacement, a valid raw primary is copied to `${STORAGE_KEY}:pre-replace` in one best-effort slot. Restoring that slot uses the same validated replacement commit and records the state it replaces. Corrupt originals use `CORRUPT_KEY`, never a new pre-replacement snapshot.
+
+The [browser storage estimate](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/estimate) includes the site origin and offline caches, not a guaranteed localStorage quota. Unsupported, failed or incomplete estimates are hidden. Automatic-rate write failures use the `storage` code and neutral RU/EN copy; network and conflict errors stay separate. Existing formats and keys are unchanged.
 
 ### Exchange rates and data compatibility
 
@@ -95,9 +101,15 @@ Behavioral details: [user guide](USAGE.ru.md), [streaks](STREAKS.md), [design](D
 
 Manifest и service worker создаются в производственной сборке. Для проверки используйте `npm run build` и `npm run preview`, а не сервер разработки. На первом открытии с интернетом сохраняются все страницы, редакторы, изображения и шрифты, включая PDF. Готовность проверяйте по статусу **«Готово офлайн»** в профиле.
 
-Обновление ждёт закрытия всех вкладок и окон BeliLog, затем применяется при следующем открытии. Принудительной перезагрузки и `skipWaiting` нет. Неудачная подготовка новой версии не заменяет прежний полный кэш. Worker не хранит финансовые данные и не кэширует ответы внешнего API; существующая проверка `localStorage`, конфликтов и восстановления сохраняется. Установка не заменяет резервную копию и не защищает от очистки данных браузером.
+Обновление ждёт закрытия всех вкладок и окон BeliLog, затем применяется при следующем открытии. Кнопка «Обновить сейчас» сохраняет черновик профиля, отправляет ожидающему worker команду `SKIP_WAITING` и один раз перезагружает текущую страницу по `controllerchange`. Некорректный или несохранённый профиль блокирует обновление. Открытые формы и диалоги закрываются; вкладки браузера не закрываются. При принудительном обновлении старые модули остаются доступны другим вкладкам до следующей обычной активации. Неудачная подготовка новой версии не заменяет прежний полный кэш. Worker не хранит финансовые данные и не кэширует ответы внешнего API; существующая проверка `localStorage`, конфликтов и восстановления сохраняется. Установка не заменяет резервную копию и не защищает от очистки данных браузером.
 
 Service worker работает через HTTPS и на localhost. Путь `/belilog/` учитывается при сборке для GitHub Pages; его кэш отделён от обычного локального `/`. Жизненный цикл описан в [документации MDN](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers).
+
+### Защита хранилища в 2.11
+
+При `QuotaExceededError` удаляется только `:last-good`, затем основная запись повторяется один раз. Повторная ошибка возвращает исходное исключение; основной ключ не удаляется. Перед полной заменой корректный основной ключ по возможности копируется в `${STORAGE_KEY}:pre-replace`. Восстановление использует тот же безопасный путь и сохраняет заменяемое состояние в этом слоте. Повреждённые данные архивируются через `CORRUPT_KEY`.
+
+Оценка в профиле относится к хранилищу всего сайта, включая офлайн-кэш, а не к точному лимиту localStorage. Недоступные оценки скрываются. Сбой записи курсов имеет отдельный нейтральный код `storage`. Форматы данных, прежние ключи и зависимости не меняются.
 
 ### Автоматические курсы
 

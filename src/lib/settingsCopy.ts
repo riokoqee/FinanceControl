@@ -22,6 +22,8 @@ export const settingsCopy = {
       "Источник вернул некорректные курсы. Сохранённые значения не изменены.",
     networkRates:
       "Не удалось обновить курсы. Сохранённые значения не изменены.",
+    storageRates:
+      "Новые курсы получены, но не сохранены в браузере. Используются прежние значения.",
     conflictRates:
       "Настройки курсов изменились. Проверьте их и повторите обновление.",
     estimates: "Пока используются примерные значения.",
@@ -59,6 +61,8 @@ export const settingsCopy = {
     invalidFeed:
       "The source returned invalid rates. Saved values have not changed.",
     networkRates: "Rates could not be updated. Saved values have not changed.",
+    storageRates:
+      "New rates were received but could not be saved in this browser. Previous values remain in use.",
     conflictRates:
       "Rate settings have changed. Check them and try refreshing again.",
     estimates: "Illustrative values are currently in use.",

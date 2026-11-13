@@ -7,6 +7,8 @@ import {
   commitStoredMutation,
   commitStoredOperation,
   readStoredData,
+  hasPreReplaceData,
+  PRE_REPLACE_KEY,
 } from "../lib/storage/storage";
 import type {
   StoredOperation,
@@ -23,6 +25,9 @@ export function usePersistentData() {
   // Explicit full replacement invalidates asynchronous work even for equal snapshots.
   const replacementEpoch = useRef(0);
   const [status, setStatus] = useState(initial.status);
+  const [preReplaceAvailable, setPreReplaceAvailable] = useState(() =>
+    hasPreReplaceData(),
+  );
   const [error, setError] = useState("");
   const lastError = useRef("");
   const persist = useCallback(
@@ -36,10 +41,12 @@ export function usePersistentData() {
         current.current = next;
         renderData(next);
         setStatus("ready");
+        setPreReplaceAvailable(hasPreReplaceData());
         setError("");
         lastError.current = "";
         return committed;
       } catch (cause) {
+        setPreReplaceAvailable(hasPreReplaceData());
         lastError.current = localizeError(
           current.current.profile.language,
           cause,
@@ -80,6 +87,8 @@ export function usePersistentData() {
   );
   useEffect(() => {
     const sync = (event: StorageEvent) => {
+      if (event.key === PRE_REPLACE_KEY || event.key === null)
+        setPreReplaceAvailable(hasPreReplaceData());
       if (event.key !== STORAGE_KEY && event.key !== null) return;
       const incoming = readStoredData(undefined, current.current);
       setStatus(incoming.status);
@@ -99,6 +108,7 @@ export function usePersistentData() {
     commitFresh,
     commitOperation,
     status,
+    preReplaceAvailable,
     error,
     lastError,
   };

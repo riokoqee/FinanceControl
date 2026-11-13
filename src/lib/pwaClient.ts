@@ -9,6 +9,8 @@ export interface PwaStatus {
   install: "none" | "available" | "installed" | "ios";
   installing: boolean;
   online: boolean;
+  applying: boolean;
+  applyError: "profile" | "failed" | null;
 }
 const listeners = new Set<() => void>();
 let snapshot: PwaStatus = {
@@ -16,12 +18,16 @@ let snapshot: PwaStatus = {
   update: "idle",
   install: "none",
   installing: false,
+  applying: false,
+  applyError: null,
   online: typeof navigator !== "undefined" ? navigator.onLine : true,
 };
 let registration: ServiceWorkerRegistration | undefined;
 let prompt: InstallPrompt | undefined;
 let started = false;
 const watched = new WeakSet<ServiceWorker>();
+let reloadPending = false;
+let reloaded = false;
 
 function publish(patch: Partial<PwaStatus>) {
   const next = { ...snapshot, ...patch };
@@ -82,7 +88,7 @@ function watch(worker: ServiceWorker) {
   changed();
 }
 
-/** Registration waits for the first render/load. It never reloads a page or activates a waiting update. */
+/** Registration waits for the first render/load; activation remains an explicit user action. */
 export function startPwa() {
   if (started || typeof window === "undefined") return;
   started = true;
@@ -188,5 +194,61 @@ export async function checkPwaUpdate() {
     } else publish({ update: "current" });
   } catch {
     publish({ update: "failed" });
+  }
+}
+
+/** Flush before activation and again before the one reload; invalid/unsaved drafts stay editable. */
+export function applyPwaUpdate(flushProfile: () => boolean): boolean {
+  if (snapshot.applying || reloaded) return false;
+  if (!reloadPending && (!registration || !isPwaUpdateWaiting(registration)))
+    return false;
+  const flush = () => {
+    try {
+      if (flushProfile()) return true;
+    } catch {
+      /* The draft must not be lost when its write fails. */
+    }
+    publish({ applying: false, applyError: "profile" });
+    return false;
+  };
+  if (!flush()) return false;
+  const reload = () => {
+    if (!flush()) return;
+    if (reloaded) return;
+    reloaded = true;
+    window.location.reload();
+  };
+  if (reloadPending) {
+    reload();
+    return true;
+  }
+  const previousController = navigator.serviceWorker.controller;
+  publish({ applying: true, applyError: null });
+  const cleanup = () => {
+    clearTimeout(timer);
+    navigator.serviceWorker.removeEventListener("controllerchange", changed);
+  };
+  const changed = () => {
+    if (
+      !navigator.serviceWorker.controller ||
+      navigator.serviceWorker.controller === previousController
+    )
+      return;
+    cleanup();
+    reloadPending = true;
+    reload();
+  };
+  const timer = setTimeout(() => {
+    cleanup();
+    publish({ applying: false, applyError: "failed" });
+  }, 15_000);
+  navigator.serviceWorker.addEventListener("controllerchange", changed);
+  try {
+    registration!.waiting!.postMessage({ type: "SKIP_WAITING" });
+    return true;
+  } catch {
+    cleanup();
+    publish({ applying: false, applyError: "failed" });
+    return false;
   }
 }

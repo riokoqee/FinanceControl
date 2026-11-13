@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { AppData, Transaction } from "../lib/finance";
 
-export type ConfirmationAction = "reset" | "demo" | "recovery";
+export type ConfirmationAction = "reset" | "demo" | "recovery" | "pre-replace";
 export type TransactionModal = "new" | Transaction;
 export interface AvatarEditorSource {
   file?: File;

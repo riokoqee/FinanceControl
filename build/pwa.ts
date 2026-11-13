@@ -68,11 +68,23 @@ self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     const meta = await cache.match(META);
-    const firstInstall = meta && await meta.text() === 'first';
+    const mode = meta && await meta.text();
+    const firstInstall = mode === 'first';
     const previous = (await caches.keys()).filter(name => name.startsWith(PREFIX) && name !== CACHE);
-    await Promise.all(previous.map(name => caches.delete(name)));
+    // Forced activation can leave other tabs running old lazy modules.
+    if (mode !== 'forced') await Promise.all(previous.map(name => caches.delete(name)));
     // Only the first installation claims an uncontrolled page. Upgrades wait for old tabs to close.
     if (firstInstall) await self.clients.claim();
+  })());
+});
+self.addEventListener('message', event => {
+  if (!event.data || event.data.type !== 'SKIP_WAITING') return;
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    const meta = await cache.match(META);
+    if (!meta || await meta.text() === 'first') return;
+    await cache.put(META, new Response('forced'));
+    await self.skipWaiting();
   })());
 });
 self.addEventListener('fetch', event => {
@@ -83,7 +95,18 @@ self.addEventListener('fetch', event => {
     event.respondWith(caches.open(CACHE).then(async cache => (await cache.match(INDEX, { ignoreVary: true })) || fetch(request)));
     return;
   }
-  if (!KNOWN.has(url.href)) return;
+  if (!KNOWN.has(url.href)) {
+    if (!url.pathname.startsWith(BASE + 'assets/') && !url.pathname.startsWith(BASE + 'fonts/')) return;
+    event.respondWith((async () => {
+      for (const name of await caches.keys()) {
+        if (!name.startsWith(PREFIX) || name === CACHE) continue;
+        const cached = await (await caches.open(name)).match(request, { ignoreVary: true });
+        if (cached) return cached;
+      }
+      return fetch(request);
+    })());
+    return;
+  }
   event.respondWith(caches.open(CACHE).then(async cache => (await cache.match(request, { ignoreVary: true })) || fetch(request)));
 });
 `;

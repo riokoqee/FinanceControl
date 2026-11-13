@@ -1,5 +1,17 @@
 # Руководство BeliLog (ベリログ)
 
+## Version 2.11 (English)
+
+**Profile → Data** shows estimated site storage when the browser supports it. This includes offline files. After a full restore, reset or demo, **Restore data from before replacement** can restore the previous valid state when its best-effort snapshot is available. Only one snapshot is kept; it remains local and is not part of PDF/JSON exports.
+
+**Profile → App → Update now** saves the profile draft and reloads the app, closing open forms and dialogs. Correct an invalid profile before retrying. Automatic-rate storage failures show a separate message and retain previous rates.
+
+## Версия 2.11
+
+В разделе **Профиль → Данные** показана доступная оценка хранилища сайта, включая офлайн-файлы. После полного восстановления, сброса или демо кнопка **«Восстановить данные до замены»** возвращает прежнее корректное состояние, если его удалось сохранить. Хранится один локальный снимок; он не входит в PDF/JSON-копии.
+
+**Профиль → Приложение → Обновить сейчас** сохраняет черновик профиля и перезагружает приложение, закрывая формы и диалоги. Некорректный профиль сначала нужно исправить. Ошибка сохранения автокурсов имеет отдельное сообщение; прежние курсы сохраняются.
+
 **Every Berry Counts.** Личный журнал расходов на React 19, TypeScript и Vite с морской атмосферой One Piece. Пять цветов: Deep Navy `#101D2C`, Gold `#D7B777`, Parchment `#F1E5CB`, Coral `#C35D4C`, Sea Teal `#5A9C9B`.
 
 [Краткое описание](../README.ru.md) · [English](../README.md)

@@ -5,7 +5,13 @@ import { usePwa } from "../hooks/usePwa";
 import Button from "./Button";
 import "./PwaSettings.css";
 
-export default function PwaSettings({ language }: { language: Language }) {
+export default function PwaSettings({
+  language,
+  onFlushProfile,
+}: {
+  language: Language;
+  onFlushProfile: () => boolean;
+}) {
   const pwa = usePwa();
   const t = pwaCopy[language];
   return (
@@ -51,9 +57,26 @@ export default function PwaSettings({ language }: { language: Language }) {
           </Button>
         )}
       </div>
-      {pwa.update === "waiting" && (
+      {(pwa.update === "waiting" || pwa.applyError === "profile") && (
+        <>
+          <p className="field-hint" role="status">
+            {t.waiting}
+          </p>
+          <Button
+            onClick={() => {
+              pwa.applyUpdate(onFlushProfile);
+            }}
+            disabled={pwa.applying}
+          >
+            <RefreshCw size={15} aria-hidden="true" />
+            {pwa.applying ? t.applying : t.apply}
+          </Button>
+          <p className="field-hint">{t.applyHint}</p>
+        </>
+      )}
+      {pwa.applyError && (
         <p className="field-hint" role="status">
-          {t.waiting}
+          {pwa.applyError === "profile" ? t.profileFailed : t.applyFailed}
         </p>
       )}
       {pwa.update === "current" && (

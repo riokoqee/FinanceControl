@@ -2,6 +2,18 @@
 
 [Releases and downloadable source](https://github.com/riokoqee/belilog/releases) · [English overview](README.md) · [По-русски](README.ru.md)
 
+## [2.11.0](https://github.com/riokoqee/belilog/releases/tag/v2.11.0) — 2026-11-13
+
+- On a primary localStorage quota error, discard the duplicate last-good copy and retry once. A failed retry preserves the primary and reports the original error.
+- Best-effort pre-replacement snapshot and a confirmed restore action for full import, reset and demo. Corrupt originals still use the existing recovery archive.
+- Optional site storage usage from the browser estimate API; automatic-rate write failures now have a separate neutral message.
+- Explicit **Update now** saves the profile draft, activates the waiting worker and reloads once. Open forms close; other tabs retain access to old lazy assets. Normal waiting and first installation are preserved.
+- Data formats 1–5, existing storage keys and dependencies remain unchanged. Corrected the storage benchmark path.
+
+При квоте удаляется дополнительная рабочая копия, затем основная запись повторяется один раз. Перед полной заменой сохраняется один слот отката с действием восстановления. В профиле показана доступная оценка хранилища, ошибка записи курсов отделена от сетевой.
+
+«Обновить сейчас» сохраняет черновик профиля и перезагружает приложение один раз, закрывая формы и диалоги. Первая установка и обычное ожидание обновления сохранены. Форматы данных, существующие ключи и зависимости не меняются.
+
 ## [2.10.0](https://github.com/riokoqee/belilog/releases/tag/v2.10.0) — 2026-11-11
 
 - Installable PWA: all pages, dialogs, fonts and PDF export are available offline after the first complete cache preparation.

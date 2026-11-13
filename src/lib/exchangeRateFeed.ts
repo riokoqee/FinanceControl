@@ -16,6 +16,7 @@ export type RateFeedErrorCode =
   | "timeout"
   | "invalid"
   | "network"
+  | "storage"
   | "conflict";
 export class RateFeedError extends Error {
   constructor(readonly code: RateFeedErrorCode) {

@@ -95,7 +95,7 @@ export function useAutomaticRates(store: AppDataController) {
           result: true,
         };
       });
-      if (!saved) setError("network");
+      if (!saved) setError("storage");
       else if (!saved.result) setError("conflict");
     } catch (cause) {
       if (!controller.signal.aborted && mounted.current) {

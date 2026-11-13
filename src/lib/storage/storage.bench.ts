@@ -2,7 +2,7 @@ import { bench, describe } from 'vitest';
 import { STORAGE_KEY, createEmptyData, type AppData } from '../finance';
 import { commitStoredData } from './storage';
 
-// Run separately from correctness tests: npx vitest bench src/lib/storage.bench.ts --run
+// Run separately from correctness tests: npx vitest bench src/lib/storage/storage.bench.ts --run
 // This isolates validation/merge/serialization; browser localStorage adds disk costs.
 function fixture(count: number) {
   let current: AppData = {
